@@ -1,17 +1,24 @@
+# VoiceMaster2.0/cogs/voice_commands.py
 import logging
 import discord
 import asyncio
 from discord.ext import commands
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.database import get_session
-from database import crud
+from database.database import db
+from services.guild_service import GuildService
+from services.voice_channel_service import VoiceChannelService
+from services.audit_log_service import AuditLogService
+from discord.ext.commands import Context
+from database import models # Ensure models is imported
+from typing import Optional, Union, cast # Ensure Optional, Union, and cast are imported
+from database.models import AuditLogEventType # New import
 
 class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @commands.group(invoke_without_command=True)
-    async def voice(self, ctx: commands.Context):
+    @commands.hybrid_group(invoke_without_command=True)
+    async def voice(self, ctx: Context):
         """Displays a custom help embed for voice commands."""
         embed = discord.Embed(
             title="🎧 VoiceMaster Commands",
@@ -26,7 +33,8 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
                 "`.voice setup` - The first-time setup for the bot.\n"
                 "`.voice edit rename` - Rename the creation channel or category.\n"
                 "`.voice edit select` - Select a different creation channel or category.\n"
-                "`.voice list` - Lists all active temporary channels."
+                "`.voice list` - Lists all active temporary channels.\n"
+                "`.voice auditlog [count]` - Shows recent bot activity."
             ),
             inline=False
         )
@@ -46,11 +54,12 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
     @voice.command(name="setup")
     @commands.has_guild_permissions(administrator=True)
-    async def setup(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def setup(self, ctx: Context):
         """Sets up the voice channel creation category and channel."""
         guild = ctx.guild
         if not guild:
-            return await ctx.send("This command can only be used in a server.")
+            return  # Should be handled by guild_only decorator
 
         def check(m: discord.Message) -> bool:
             return m.author == ctx.author and m.channel == ctx.channel
@@ -67,32 +76,61 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             if not guild.owner_id:
                  return await ctx.send("Could not determine the server owner.")
 
-            async with get_session() as session:
-                await crud.create_or_update_guild(session, guild.id, guild.owner_id, category.id, channel.id)
+            async with db.get_session() as session:
+                guild_service = GuildService(session)
+                audit_log_service = AuditLogService(session)
+                await guild_service.create_or_update_guild(guild.id, guild.owner_id, category.id, channel.id)
+                await audit_log_service.log_event( # Log setup
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.BOT_SETUP,
+                    user_id=ctx.author.id,
+                    details=f"Bot setup complete. Category: '{category.name}' ({category.id}), Creation Channel: '{channel.name}' ({channel.id})."
+                )
 
             await ctx.send(f"✅ Setup complete! Users can now join '{channel.name}' to create their own channels.")
         except asyncio.TimeoutError:
             await ctx.send("Setup timed out. Please try again.")
+            async with db.get_session() as session:
+                audit_log_service = AuditLogService(session)
+                await audit_log_service.log_event( # Log setup timeout
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.SETUP_TIMED_OUT,
+                    user_id=ctx.author.id,
+                    details="Bot setup timed out."
+                )
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
             logging.error(f"Setup error in guild {guild.id}: {e}")
+            async with db.get_session() as session:
+                audit_log_service = AuditLogService(session)
+                await audit_log_service.log_event( # Log setup error
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.SETUP_ERROR,
+                    user_id=ctx.author.id,
+                    details=f"An error occurred during setup: {e}"
+                )
+
 
     @voice.group(name="edit", invoke_without_command=True)
     @commands.has_guild_permissions(administrator=True)
-    async def edit(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def edit(self, ctx: Context):
         """Edit the bot's configuration for this server."""
         await ctx.send("Please specify what you want to edit. Use `.voice edit rename` or `.voice edit select`.")
 
     @edit.command(name="rename")
     @commands.has_guild_permissions(administrator=True)
-    async def edit_rename(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def edit_rename(self, ctx: Context):
         """Rename the existing creation channel and category."""
         guild = ctx.guild
         if not guild:
-            return await ctx.send("This command can only be used in a server.")
+            return
 
-        async with get_session() as session:
-            guild_config = await crud.get_guild(session, guild.id)
+        async with db.get_session() as session:
+            guild_service = GuildService(session)
+            audit_log_service = AuditLogService(session)
+            guild_config = await guild_service.get_guild_config(guild.id)
             if not guild_config:
                 return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.")
 
@@ -110,11 +148,41 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
                 if guild_config and isinstance(guild_config.creation_channel_id, int):
                     creation_channel = guild.get_channel(guild_config.creation_channel_id)
                     if creation_channel:
+                        old_name = creation_channel.name
                         await creation_channel.edit(name=msg.content)
                         await msg.reply(f"✅ Channel renamed to **{msg.content}**.", delete_after=10)
+                        async with db.get_session() as s:
+                            audit_log_service_inner = AuditLogService(s)
+                            await audit_log_service_inner.log_event(
+                                guild_id=guild.id,
+                                event_type=AuditLogEventType.CHANNEL_RENAMED,
+                                user_id=ctx.author.id,
+                                channel_id=creation_channel.id,
+                                details=f"Creation channel renamed from '{old_name}' to '{msg.content}'."
+                            )
                 await msg.delete()
             except asyncio.TimeoutError:
                 await interaction.followup.send("Rename timed out.", ephemeral=True)
+                async with db.get_session() as s:
+                    audit_log_service_inner = AuditLogService(s)
+                    await audit_log_service_inner.log_event(
+                        guild_id=guild.id,
+                        event_type=AuditLogEventType.CHANNEL_RENAME_TIMED_OUT,
+                        user_id=ctx.author.id,
+                        details="Renaming 'Join' channel timed out."
+                    )
+            except Exception as e:
+                logging.error(f"Error renaming channel in guild {guild.id}: {e}")
+                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+                async with db.get_session() as s:
+                    audit_log_service_inner = AuditLogService(s)
+                    await audit_log_service_inner.log_event(
+                        guild_id=guild.id,
+                        event_type=AuditLogEventType.CHANNEL_RENAME_ERROR,
+                        user_id=ctx.author.id,
+                        details=f"Error renaming 'Join' channel: {e}"
+                    )
+
 
         async def rename_category_callback(interaction: discord.Interaction):
             if interaction.user != ctx.author:
@@ -126,11 +194,41 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
                 if guild_config and isinstance(guild_config.voice_category_id, int):
                     category = guild.get_channel(guild_config.voice_category_id)
                     if category:
+                        old_name = category.name
                         await category.edit(name=msg.content)
                         await msg.reply(f"✅ Category renamed to **{msg.content}**.", delete_after=10)
+                        async with db.get_session() as s:
+                            audit_log_service_inner = AuditLogService(s)
+                            await audit_log_service_inner.log_event(
+                                guild_id=guild.id,
+                                event_type=AuditLogEventType.CATEGORY_RENAMED,
+                                user_id=ctx.author.id,
+                                channel_id=category.id,
+                                details=f"Category renamed from '{old_name}' to '{msg.content}'."
+                            )
                 await msg.delete()
             except asyncio.TimeoutError:
                 await interaction.followup.send("Rename timed out.", ephemeral=True)
+                async with db.get_session() as s:
+                    audit_log_service_inner = AuditLogService(s)
+                    await audit_log_service_inner.log_event(
+                        guild_id=guild.id,
+                        event_type=AuditLogEventType.CATEGORY_RENAME_TIMED_OUT,
+                        user_id=ctx.author.id,
+                        details="Renaming category timed out."
+                    )
+            except Exception as e:
+                logging.error(f"Error renaming category in guild {guild.id}: {e}")
+                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
+                async with db.get_session() as s:
+                    audit_log_service_inner = AuditLogService(s)
+                    await audit_log_service_inner.log_event(
+                        guild_id=guild.id,
+                        event_type=AuditLogEventType.CATEGORY_RENAME_ERROR,
+                        user_id=ctx.author.id,
+                        details=f"Error renaming category: {e}"
+                    )
+
 
         rename_channel_btn.callback = rename_channel_callback
         rename_category_btn.callback = rename_category_callback
@@ -140,14 +238,17 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
     @edit.command(name="select")
     @commands.has_guild_permissions(administrator=True)
-    async def edit_select(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def edit_select(self, ctx: Context):
         """Select a different creation channel or category."""
         guild = ctx.guild
         if not guild or not guild.owner_id:
-            return await ctx.send("This command can only be used in a server.")
+            return
 
-        async with get_session() as session:
-            guild_config = await crud.get_guild(session, guild.id)
+        async with db.get_session() as session:
+            guild_service = GuildService(session)
+            audit_log_service = AuditLogService(session)
+            guild_config = await guild_service.get_guild_config(guild.id)
             if not guild_config:
                 return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.")
 
@@ -164,14 +265,25 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             if interaction.user != ctx.author or not guild.owner_id:
                 return await interaction.followup.send("You cannot interact with this menu.")
             
-            async with get_session() as s:
-                current_config = await crud.get_guild(s, guild.id)
+            async with db.get_session() as s:
+                guild_service_inner = GuildService(s)
+                audit_log_service_inner = AuditLogService(s)
+                current_config = await guild_service_inner.get_guild_config(guild.id)
                 if not current_config or not isinstance(current_config.voice_category_id, int):
                     return await interaction.followup.send("Error: Could not find current config.")
                 
+                old_channel_id = current_config.creation_channel_id
                 new_channel_id = int(channel_select.values[0])
-                await crud.create_or_update_guild(s, guild.id, guild.owner_id, current_config.voice_category_id, new_channel_id)
-            await interaction.followup.send(f"✅ 'Join to Create' channel updated!")
+                await guild_service_inner.create_or_update_guild(guild.id, guild.owner_id, current_config.voice_category_id, new_channel_id)
+                await interaction.followup.send(f"✅ 'Join to Create' channel updated!")
+                
+                await audit_log_service_inner.log_event(
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.CREATION_CHANNEL_CHANGED,
+                    user_id=ctx.author.id,
+                    channel_id=new_channel_id,
+                    details=f"'Join to Create' channel changed from {old_channel_id} to {new_channel_id}."
+                )
             view.stop()
 
         async def category_callback(interaction: discord.Interaction):
@@ -179,14 +291,24 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             if interaction.user != ctx.author or not guild.owner_id:
                 return await interaction.followup.send("You cannot interact with this menu.")
 
-            async with get_session() as s:
-                current_config = await crud.get_guild(s, guild.id)
+            async with db.get_session() as s:
+                guild_service_inner = GuildService(s)
+                audit_log_service_inner = AuditLogService(s)
+                current_config = await guild_service_inner.get_guild_config(guild.id)
                 if not current_config or not isinstance(current_config.creation_channel_id, int):
                     return await interaction.followup.send("Error: Could not find current config.")
 
+                old_category_id = current_config.voice_category_id
                 new_category_id = int(category_select.values[0])
-                await crud.create_or_update_guild(s, guild.id, guild.owner_id, new_category_id, current_config.creation_channel_id)
-            await interaction.followup.send(f"✅ Category for temporary channels updated!")
+                await guild_service_inner.create_or_update_guild(guild.id, guild.owner_id, new_category_id, current_config.creation_channel_id)
+                await interaction.followup.send(f"✅ Category for temporary channels updated!")
+                await audit_log_service_inner.log_event(
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.VOICE_CATEGORY_CHANGED,
+                    user_id=ctx.author.id,
+                    channel_id=new_category_id,
+                    details=f"Voice category changed from {old_category_id} to {new_category_id}."
+                )
             view.stop()
 
         channel_select.callback = channel_callback
@@ -197,17 +319,27 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
     @voice.command(name="list")
     @commands.has_guild_permissions(administrator=True)
-    async def list_channels(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def list_channels(self, ctx: Context):
         """Lists all active temporary voice channels."""
         guild = ctx.guild
         if not guild:
-            return await ctx.send("This command can only be used in a server.")
+            return
 
-        async with get_session() as session:
-            all_channels = await crud.get_all_voice_channels(session)
+        async with db.get_session() as session:
+            guild_service = GuildService(session)
+            all_channels = await guild_service.get_all_voice_channels()
+            audit_log_service = AuditLogService(session)
         
         if not all_channels:
-            return await ctx.send("There are no active temporary channels.")
+            await ctx.send("There are no active temporary channels.")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.LIST_CHANNELS,
+                user_id=ctx.author.id,
+                details="Attempted to list active channels, none found."
+            )
+            return
 
         embed = discord.Embed(title="Active Temporary Channels", color=discord.Color.green())
         description = ""
@@ -222,81 +354,121 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
         
         embed.description = description or "No active temporary channels found."
         await ctx.send(embed=embed)
+        await audit_log_service.log_event(
+            guild_id=guild.id,
+            event_type=AuditLogEventType.LIST_CHANNELS,
+            user_id=ctx.author.id,
+            details=f"Listed {len(all_channels)} active temporary channels."
+        )
 
     @voice.command(name="lock")
-    async def lock(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def lock(self, ctx: Context):
         """Locks your current voice channel."""
         author = ctx.author
         guild = ctx.guild
         if not isinstance(author, discord.Member) or not guild:
-            return await ctx.send("This command can only be used in a server.")
+            return
 
         voice_state = author.voice
         if not voice_state or not voice_state.channel:
             return await ctx.send("You are not in a voice channel.")
 
-        async with get_session() as session:
-            vc = await crud.get_voice_channel_by_owner(session, author.id)
+        async with db.get_session() as session:
+            vc_service = VoiceChannelService(session)
+            audit_log_service = AuditLogService(session)
+            vc = await vc_service.get_voice_channel_by_owner(author.id)
             if not vc or voice_state.channel.id != vc.channel_id:
                 return await ctx.send("You don't own this voice channel.")
             
             await voice_state.channel.set_permissions(guild.default_role, connect=False)
             await ctx.send("🔒 Channel locked.")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.CHANNEL_LOCKED,
+                user_id=author.id,
+                channel_id=voice_state.channel.id,
+                details=f"User {author.display_name} locked channel '{voice_state.channel.name}'."
+            )
 
     @voice.command(name="unlock")
-    async def unlock(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def unlock(self, ctx: Context):
         """Unlocks your current voice channel."""
         author = ctx.author
         guild = ctx.guild
         if not isinstance(author, discord.Member) or not guild:
-            return await ctx.send("This command can only be used in a server.")
+            return
 
         voice_state = author.voice
         if not voice_state or not voice_state.channel:
             return await ctx.send("You are not in a voice channel.")
 
-        async with get_session() as session:
-            vc = await crud.get_voice_channel_by_owner(session, author.id)
+        async with db.get_session() as session:
+            vc_service = VoiceChannelService(session)
+            audit_log_service = AuditLogService(session)
+            vc = await vc_service.get_voice_channel_by_owner(author.id)
             if not vc or voice_state.channel.id != vc.channel_id:
                 return await ctx.send("You don't own this voice channel.")
             
             await voice_state.channel.set_permissions(guild.default_role, connect=True)
             await ctx.send("🔓 Channel unlocked.")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.CHANNEL_UNLOCKED,
+                user_id=author.id,
+                channel_id=voice_state.channel.id,
+                details=f"User {author.display_name} unlocked channel '{voice_state.channel.name}'."
+            )
 
     @voice.command(name="permit")
-    async def permit(self, ctx: commands.Context, member: discord.Member):
+    @commands.guild_only()
+    async def permit(self, ctx: Context, member: discord.Member):
         """Permits a user to join your locked channel."""
         author = ctx.author
-        if not isinstance(author, discord.Member):
-            return await ctx.send("This command can only be used in a server.")
+        guild = ctx.guild
+        if not isinstance(author, discord.Member) or not guild:
+            return
             
         voice_state = author.voice
         if not voice_state or not voice_state.channel:
             return await ctx.send("You are not in a voice channel.")
 
-        async with get_session() as session:
-            vc = await crud.get_voice_channel_by_owner(session, author.id)
+        async with db.get_session() as session:
+            vc_service = VoiceChannelService(session)
+            audit_log_service = AuditLogService(session)
+            vc = await vc_service.get_voice_channel_by_owner(author.id)
             if not vc or voice_state.channel.id != vc.channel_id:
                 return await ctx.send("You don't own this voice channel.")
             
             await voice_state.channel.set_permissions(member, connect=True)
             await ctx.send(f"✅ {member.mention} can now join your channel.")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.CHANNEL_PERMIT,
+                user_id=author.id,
+                channel_id=voice_state.channel.id,
+                details=f"User {author.display_name} permitted {member.display_name} to join '{voice_state.channel.name}'."
+            )
 
     @voice.command(name="claim")
-    async def claim(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def claim(self, ctx: Context):
         """Claims ownership of an abandoned channel."""
         author = ctx.author
         guild = ctx.guild
         if not isinstance(author, discord.Member) or not guild:
-            return await ctx.send("This command can only be used in a server.")
+            return
             
         voice_state = author.voice
         if not voice_state or not voice_state.channel:
             return await ctx.send("You are not in a voice channel.")
             
         channel = voice_state.channel
-        async with get_session() as session:
-            vc = await crud.get_voice_channel(session, channel.id)
+        async with db.get_session() as session:
+            vc_service = VoiceChannelService(session)
+            audit_log_service = AuditLogService(session)
+            vc = await vc_service.get_voice_channel(channel.id)
             if not vc:
                 return await ctx.send("This channel is not a temporary channel.")
 
@@ -305,44 +477,165 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             if owner and owner in channel.members:
                 return await ctx.send(f"The owner, {owner.mention}, is still in the channel.")
 
-            await crud.update_voice_channel_owner(session, channel.id, author.id)
+            old_owner_id = vc.owner_id
+            await vc_service.update_voice_channel_owner(channel.id, author.id)
             await channel.set_permissions(author, manage_channels=True, manage_roles=True)
             await ctx.send(f"👑 {author.mention} you are now the owner of this channel!")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.CHANNEL_CLAIMED,
+                user_id=author.id,
+                channel_id=channel.id,
+                details=f"User {author.display_name} claimed ownership of channel '{channel.name}' from old owner ID {old_owner_id}."
+            )
 
     @voice.command(name="name")
-    async def name(self, ctx: commands.Context, *, new_name: str):
+    @commands.guild_only()
+    async def name(self, ctx: Context, *, new_name: str):
         """Changes the name of your channel."""
         author = ctx.author
-        if not isinstance(author, discord.Member):
-            return await ctx.send("This command can only be used in a server.")
+        guild = ctx.guild
+        if not isinstance(author, discord.Member) or not guild:
+            return
 
-        async with get_session() as session:
-            await crud.update_user_channel_name(session, author.id, new_name)
+        async with db.get_session() as session:
+            vc_service = VoiceChannelService(session)
+            audit_log_service = AuditLogService(session)
+            await vc_service.update_user_channel_name(author.id, new_name)
             
-            vc = await crud.get_voice_channel_by_owner(session, author.id)
+            vc = await vc_service.get_voice_channel_by_owner(author.id)
             if vc and author.voice and author.voice.channel and author.voice.channel.id == vc.channel_id:
+                old_channel_name = author.voice.channel.name
                 await author.voice.channel.edit(name=new_name)
+                await audit_log_service.log_event(
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.LIVE_CHANNEL_NAME_CHANGED,
+                    user_id=author.id,
+                    channel_id=author.voice.channel.id,
+                    details=f"User {author.display_name} changed live channel name from '{old_channel_name}' to '{new_name}'."
+                )
 
             await ctx.send(f"Your channel name has been set to **{new_name}**. It will apply to your current (if you own one) and all future channels.")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.USER_DEFAULT_NAME_SET,
+                user_id=author.id,
+                details=f"User {author.display_name} set default channel name to '{new_name}'."
+            )
+
 
     @voice.command(name="limit")
-    async def limit(self, ctx: commands.Context, new_limit: int):
+    @commands.guild_only()
+    async def limit(self, ctx: Context, new_limit: int):
         """Changes the user limit of your channel."""
         author = ctx.author
-        if not isinstance(author, discord.Member):
-            return await ctx.send("This command can only be used in a server.")
+        guild = ctx.guild
+        if not isinstance(author, discord.Member) or not guild:
+            return
 
         if not (0 <= new_limit <= 99):
             return await ctx.send("Please provide a limit between 0 (unlimited) and 99.")
         
-        async with get_session() as session:
-            await crud.update_user_channel_limit(session, author.id, new_limit)
+        async with db.get_session() as session:
+            vc_service = VoiceChannelService(session)
+            audit_log_service = AuditLogService(session)
+            await vc_service.update_user_channel_limit(author.id, new_limit)
 
-            vc = await crud.get_voice_channel_by_owner(session, author.id)
+            vc = await vc_service.get_voice_channel_by_owner(author.id)
             if vc and author.voice and author.voice.channel and author.voice.channel.id == vc.channel_id:
+                old_limit = author.voice.channel.user_limit
                 await author.voice.channel.edit(user_limit=new_limit)
+                await audit_log_service.log_event(
+                    guild_id=guild.id,
+                    event_type=AuditLogEventType.LIVE_CHANNEL_LIMIT_CHANGED,
+                    user_id=author.id,
+                    channel_id=author.voice.channel.id,
+                    details=f"User {author.display_name} changed live channel limit from {old_limit} to {new_limit}."
+                )
 
-            await ctx.send(f"Your channel name has been set to **{new_limit if new_limit > 0 else 'unlimited'}**. It will apply to your current (if you own one) and all future channels.")
+            limit_str = f"{new_limit if new_limit > 0 else 'unlimited'}"
+            await ctx.send(f"Your channel limit has been set to **{limit_str}**. It will apply to your current (if you own one) and all future channels.")
+            await audit_log_service.log_event(
+                guild_id=guild.id,
+                event_type=AuditLogEventType.USER_DEFAULT_LIMIT_SET,
+                user_id=author.id,
+                details=f"User {author.display_name} set default channel limit to {new_limit}."
+            )
+
+    @voice.command(name="auditlog")
+    @commands.has_guild_permissions(administrator=True)
+    @commands.guild_only()
+    async def auditlog(self, ctx: Context, count: int = 10):
+        """
+        Displays the latest X bot activity logs.
+        Adjustable via settings (default is 10).
+        """
+        if not ctx.guild:
+            return
+
+        if not (1 <= count <= 50):
+            return await ctx.send("Please provide a count between 1 and 50.")
+
+        async with db.get_session() as session:
+            audit_log_service = AuditLogService(session)
+            logs = await audit_log_service.get_latest_logs(ctx.guild.id, count)
+        
+        if not logs:
+            return await ctx.send("No audit log entries found for this guild.")
+
+        embed = discord.Embed(
+            title=f"Recent VoiceMaster Activity Logs ({len(logs)} entries)",
+            color=discord.Color.orange()
+        )
+        embed.set_footer(text="Most recent entries first.")
+
+        for entry in logs:
+            # Pylance is very strict with SQLAlchemy ORM types.
+            # Use 'cast' to explicitly tell Pylance the type of the value
+            # once it's accessed from the loaded ORM instance.
+            user_id_val: Optional[int] = cast(Optional[int], entry.user_id)
+            channel_id_val: Optional[int] = cast(Optional[int], entry.channel_id)
+            details_val: Optional[str] = cast(Optional[str], entry.details)
+
+            user_obj: Union[discord.User, str] = "N/A"
+            if user_id_val is not None:
+                fetched_user = self.bot.get_user(user_id_val)
+                if fetched_user:
+                    user_obj = fetched_user
+                else:
+                    user_obj = f"User ID: {user_id_val} (Not found)"
+            
+            # Updated to cover more channel types for accurate hinting
+            channel_obj: Union[discord.abc.GuildChannel, discord.Thread, discord.abc.PrivateChannel, str] = "N/A"
+            if channel_id_val is not None:
+                fetched_channel = self.bot.get_channel(channel_id_val)
+                if fetched_channel:
+                    channel_obj = fetched_channel
+                else:
+                    channel_obj = f"Channel ID: {channel_id_val} (Not found)"
+            
+            user_display = user_obj.mention if isinstance(user_obj, discord.User) else str(user_obj)
+            
+            # Check for common guild channel types for mention, otherwise just use string representation
+            if isinstance(channel_obj, (discord.VoiceChannel, discord.TextChannel, discord.CategoryChannel, discord.Thread)):
+                channel_display = channel_obj.mention
+            elif isinstance(channel_obj, discord.abc.PrivateChannel): # Direct Message channel, no mention in guild context
+                channel_display = f"DM Channel ({channel_obj.id})"
+            else: # Fallback for other or unfetched types
+                channel_display = str(channel_obj)
+
+            timestamp_str = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
+
+            field_value = (
+                f"**Type**: {entry.event_type}\n" # entry.event_type is already the string value from DB
+                f"**User**: {user_display}\n"
+                f"**Channel**: {channel_display}\n"
+                f"**Details**: {details_val if details_val is not None else 'N/A'}\n"
+                f"**Time**: {timestamp_str}"
+            )
+            embed.add_field(name=f"Log Entry #{entry.id}", value=field_value, inline=False)
+        
+        await ctx.send(embed=embed)
 
 
 async def setup(bot: commands.Bot):

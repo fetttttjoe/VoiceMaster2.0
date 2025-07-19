@@ -1,0 +1,67 @@
+name: VoiceMaster CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: myuser
+          POSTGRES_PASSWORD: mypassword
+          POSTGRES_DB: voicedb_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install and upgrade dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+        # Force upgrade typing-extensions to the version required by sqlalchemy and alembic
+        pip install --upgrade typing-extensions
+
+    - name: Run database migrations
+      env:
+        # These credentials must match the postgres service above
+        POSTGRES_USER: myuser
+        POSTGRES_PASSWORD: mypassword
+        POSTGRES_DB: voicedb_test
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        # This is needed for the DATABASE_URL in config.py
+        DISCORD_TOKEN: dummy_token 
+      run: alembic upgrade head
+
+    - name: Run tests
+      env:
+        # These credentials must match the postgres service above
+        POSTGRES_USER: myuser
+        POSTGRES_PASSWORD: mypassword
+        POSTGRES_DB: voicedb_test
+        POSTGRES_HOST: localhost
+        POSTGRES_PORT: 5432
+        # This is needed for the DATABASE_URL in config.py
+        DISCORD_TOKEN: dummy_token 
+      run: pytest

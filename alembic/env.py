@@ -61,6 +61,7 @@ async def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    
     # Create an async engine from the config
     connectable = create_async_engine(DATABASE_URL)
 

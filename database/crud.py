@@ -1,7 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from . import models
-
+from sqlalchemy import desc
+from typing import Optional
+from .models import AuditLogEventType
 # Guild CRUD
 async def get_guild(db: AsyncSession, guild_id: int):
     result = await db.execute(select(models.Guild).where(models.Guild.id == guild_id))
@@ -71,3 +73,31 @@ async def update_user_channel_limit(db: AsyncSession, user_id: int, limit: int):
     else:
         db.add(models.UserSettings(user_id=user_id, custom_channel_limit=limit))
     await db.commit()
+
+async def create_audit_log_entry(
+    db: AsyncSession,
+    guild_id: int,
+    event_type: AuditLogEventType, # Changed type hint to Enum
+    user_id: Optional[int] = None,
+    channel_id: Optional[int] = None,
+    details: Optional[str] = None
+):
+    """Creates a new audit log entry."""
+    db.add(models.AuditLogEntry(
+        guild_id=guild_id,
+        user_id=user_id,
+        channel_id=channel_id,
+        event_type=event_type.value, # Store the string value
+        details=details
+    ))
+    await db.commit()
+
+async def get_latest_audit_log_entries(db: AsyncSession, guild_id: int, limit: int = 10):
+    """Gets the latest audit log entries for a given guild."""
+    result = await db.execute(
+        select(models.AuditLogEntry)
+        .where(models.AuditLogEntry.guild_id == guild_id)
+        .order_by(desc(models.AuditLogEntry.timestamp))
+        .limit(limit)
+    )
+    return result.scalars().all()

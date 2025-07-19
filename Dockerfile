@@ -1,10 +1,12 @@
+# VoiceMaster2.0/Dockerfile
+
 # ---- Builder Stage ----
 # This stage installs dependencies, including build-time ones.
 FROM python:alpine3.22 AS builder
 
 # Set environment variables to prevent generating .pyc files and to run Python in unbuffered mode
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -21,12 +23,13 @@ RUN python -m venv /opt/venv
 # Set the PATH to include the virtual environment's binaries
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy the requirements file and install dependencies into the venv
+# Copy the requirements files and install dependencies into the venv
 COPY requirements.txt .
+COPY requirements-dev.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-dev.txt
 
 # ---- Final Stage ----
-# This is the lean, production-ready image.
 FROM python:alpine3.22 AS final
 
 # Set the working directory

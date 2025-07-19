@@ -1,6 +1,6 @@
 alembic
 asyncpg
-discord.py
+discord.py>=2.3.0
 python-dotenv
 SQLAlchemy
 PyNaCl
