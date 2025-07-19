@@ -1,4 +1,3 @@
-# VoiceMaster2.0/cogs/voice_commands.py
 import logging
 import discord
 import asyncio
@@ -8,10 +7,11 @@ from database.database import db
 from services.guild_service import GuildService
 from services.voice_channel_service import VoiceChannelService
 from services.audit_log_service import AuditLogService
+from services.audit_decorator import audit_log
 from discord.ext.commands import Context
-from database import models # Ensure models is imported
-from typing import Optional, Union, cast # Ensure Optional, Union, and cast are imported
-from database.models import AuditLogEventType # New import
+from database import models 
+from typing import Optional, Union, cast 
+from database.models import AuditLogEventType 
 
 class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
     def __init__(self, bot: commands.Bot):
@@ -59,7 +59,7 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
         """Sets up the voice channel creation category and channel."""
         guild = ctx.guild
         if not guild:
-            return  # Should be handled by guild_only decorator
+            return
 
         def check(m: discord.Message) -> bool:
             return m.author == ctx.author and m.channel == ctx.channel
@@ -80,7 +80,7 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
                 guild_service = GuildService(session)
                 audit_log_service = AuditLogService(session)
                 await guild_service.create_or_update_guild(guild.id, guild.owner_id, category.id, channel.id)
-                await audit_log_service.log_event( # Log setup
+                await audit_log_service.log_event(
                     guild_id=guild.id,
                     event_type=AuditLogEventType.BOT_SETUP,
                     user_id=ctx.author.id,
@@ -92,7 +92,7 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             await ctx.send("Setup timed out. Please try again.")
             async with db.get_session() as session:
                 audit_log_service = AuditLogService(session)
-                await audit_log_service.log_event( # Log setup timeout
+                await audit_log_service.log_event(
                     guild_id=guild.id,
                     event_type=AuditLogEventType.SETUP_TIMED_OUT,
                     user_id=ctx.author.id,
@@ -103,7 +103,7 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             logging.error(f"Setup error in guild {guild.id}: {e}")
             async with db.get_session() as session:
                 audit_log_service = AuditLogService(session)
-                await audit_log_service.log_event( # Log setup error
+                await audit_log_service.log_event(
                     guild_id=guild.id,
                     event_type=AuditLogEventType.SETUP_ERROR,
                     user_id=ctx.author.id,
@@ -129,7 +129,6 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
         async with db.get_session() as session:
             guild_service = GuildService(session)
-            audit_log_service = AuditLogService(session)
             guild_config = await guild_service.get_guild_config(guild.id)
             if not guild_config:
                 return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.")
@@ -247,7 +246,6 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
         async with db.get_session() as session:
             guild_service = GuildService(session)
-            audit_log_service = AuditLogService(session)
             guild_config = await guild_service.get_guild_config(guild.id)
             if not guild_config:
                 return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.")
@@ -363,6 +361,7 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
     @voice.command(name="lock")
     @commands.guild_only()
+    @audit_log(AuditLogEventType.CHANNEL_LOCKED, "User {ctx.author.display_name} locked channel '{ctx.author.voice.channel.name}'.")
     async def lock(self, ctx: Context):
         """Locks your current voice channel."""
         author = ctx.author
@@ -376,23 +375,16 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
         async with db.get_session() as session:
             vc_service = VoiceChannelService(session)
-            audit_log_service = AuditLogService(session)
             vc = await vc_service.get_voice_channel_by_owner(author.id)
             if not vc or voice_state.channel.id != vc.channel_id:
                 return await ctx.send("You don't own this voice channel.")
             
             await voice_state.channel.set_permissions(guild.default_role, connect=False)
             await ctx.send("🔒 Channel locked.")
-            await audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.CHANNEL_LOCKED,
-                user_id=author.id,
-                channel_id=voice_state.channel.id,
-                details=f"User {author.display_name} locked channel '{voice_state.channel.name}'."
-            )
 
     @voice.command(name="unlock")
     @commands.guild_only()
+    @audit_log(AuditLogEventType.CHANNEL_UNLOCKED, "User {ctx.author.display_name} unlocked channel '{ctx.author.voice.channel.name}'.")
     async def unlock(self, ctx: Context):
         """Unlocks your current voice channel."""
         author = ctx.author
@@ -406,28 +398,20 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
         async with db.get_session() as session:
             vc_service = VoiceChannelService(session)
-            audit_log_service = AuditLogService(session)
             vc = await vc_service.get_voice_channel_by_owner(author.id)
             if not vc or voice_state.channel.id != vc.channel_id:
                 return await ctx.send("You don't own this voice channel.")
             
             await voice_state.channel.set_permissions(guild.default_role, connect=True)
             await ctx.send("🔓 Channel unlocked.")
-            await audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.CHANNEL_UNLOCKED,
-                user_id=author.id,
-                channel_id=voice_state.channel.id,
-                details=f"User {author.display_name} unlocked channel '{voice_state.channel.name}'."
-            )
 
     @voice.command(name="permit")
     @commands.guild_only()
+    @audit_log(AuditLogEventType.CHANNEL_PERMIT, "User {ctx.author.display_name} permitted {member.mention} to join '{ctx.author.voice.channel.name}'.")
     async def permit(self, ctx: Context, member: discord.Member):
         """Permits a user to join your locked channel."""
         author = ctx.author
-        guild = ctx.guild
-        if not isinstance(author, discord.Member) or not guild:
+        if not isinstance(author, discord.Member):
             return
             
         voice_state = author.voice
@@ -436,20 +420,12 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
 
         async with db.get_session() as session:
             vc_service = VoiceChannelService(session)
-            audit_log_service = AuditLogService(session)
             vc = await vc_service.get_voice_channel_by_owner(author.id)
             if not vc or voice_state.channel.id != vc.channel_id:
                 return await ctx.send("You don't own this voice channel.")
             
             await voice_state.channel.set_permissions(member, connect=True)
             await ctx.send(f"✅ {member.mention} can now join your channel.")
-            await audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.CHANNEL_PERMIT,
-                user_id=author.id,
-                channel_id=voice_state.channel.id,
-                details=f"User {author.display_name} permitted {member.display_name} to join '{voice_state.channel.name}'."
-            )
 
     @voice.command(name="claim")
     @commands.guild_only()
@@ -590,9 +566,6 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
         embed.set_footer(text="Most recent entries first.")
 
         for entry in logs:
-            # Pylance is very strict with SQLAlchemy ORM types.
-            # Use 'cast' to explicitly tell Pylance the type of the value
-            # once it's accessed from the loaded ORM instance.
             user_id_val: Optional[int] = cast(Optional[int], entry.user_id)
             channel_id_val: Optional[int] = cast(Optional[int], entry.channel_id)
             details_val: Optional[str] = cast(Optional[str], entry.details)
@@ -605,7 +578,6 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
                 else:
                     user_obj = f"User ID: {user_id_val} (Not found)"
             
-            # Updated to cover more channel types for accurate hinting
             channel_obj: Union[discord.abc.GuildChannel, discord.Thread, discord.abc.PrivateChannel, str] = "N/A"
             if channel_id_val is not None:
                 fetched_channel = self.bot.get_channel(channel_id_val)
@@ -616,18 +588,17 @@ class VoiceCommandsCog(commands.Cog, name="Voice Commands"):
             
             user_display = user_obj.mention if isinstance(user_obj, discord.User) else str(user_obj)
             
-            # Check for common guild channel types for mention, otherwise just use string representation
             if isinstance(channel_obj, (discord.VoiceChannel, discord.TextChannel, discord.CategoryChannel, discord.Thread)):
                 channel_display = channel_obj.mention
-            elif isinstance(channel_obj, discord.abc.PrivateChannel): # Direct Message channel, no mention in guild context
+            elif isinstance(channel_obj, discord.abc.PrivateChannel):
                 channel_display = f"DM Channel ({channel_obj.id})"
-            else: # Fallback for other or unfetched types
+            else:
                 channel_display = str(channel_obj)
 
             timestamp_str = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
 
             field_value = (
-                f"**Type**: {entry.event_type}\n" # entry.event_type is already the string value from DB
+                f"**Type**: {entry.event_type}\n"
                 f"**User**: {user_display}\n"
                 f"**Channel**: {channel_display}\n"
                 f"**Details**: {details_val if details_val is not None else 'N/A'}\n"
