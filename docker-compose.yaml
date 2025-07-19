@@ -39,6 +39,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command:  ["pytest"]
+    command: ["pytest ", "--cov=.", "--cov-report=xml"]
 volumes:
   postgres_data:
