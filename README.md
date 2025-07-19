@@ -2,6 +2,13 @@
 
 VoiceMaster 2.0 is a Discord bot designed to provide advanced management features for temporary voice channels. Users can create, customize, and manage their own voice channels, including setting names, user limits, and managing permissions. The bot also includes administrator commands for server setup, configuration edits, and detailed audit logging of bot activities.
 
+If you'd like to invite the bot, you can use the following link:  
+🔗 [Invite Link](https://discord.com/oauth2/authorize?client_id=1395824661207453746&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flocalhost&integration_type=0&scope=bot+applications.commands+guilds.members.read)
+
+> ⚠️ **Note:** The bot currently requests administrator permissions.  
+> If anyone besides me is interested in using it, feel free to open a pull request / Issue.  
+> I'll then look into defining the minimal set of permissions the bot actually needs.
+    
 ## Features
 
 * **Dynamic Channel Creation**: Users can join a designated "Join to Create" channel to automatically generate a new temporary voice channel.
