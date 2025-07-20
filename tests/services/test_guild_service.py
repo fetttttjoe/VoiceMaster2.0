@@ -1,17 +1,29 @@
 import pytest
 from unittest.mock import patch, AsyncMock
+
 from services.guild_service import GuildService
+# Import the repository abstraction
+from interfaces.guild_repository import IGuildRepository
+
 
 @pytest.mark.asyncio
-async def test_get_guild_config(mock_db_session):
-    with patch('database.crud.get_guild', new_callable=AsyncMock) as mock_get_guild:
-        guild_service = GuildService(mock_db_session)
-        await guild_service.get_guild_config(123)
-        mock_get_guild.assert_called_once_with(mock_db_session, 123)
+async def test_get_guild_config(mock_db_session): # mock_db_session is now unused but kept by fixture
+    # Create a mock for the repository
+    mock_guild_repository = AsyncMock(spec=IGuildRepository)
+
+    # Instantiate the service with the mocked repository
+    guild_service = GuildService(mock_guild_repository)
+    await guild_service.get_guild_config(123)
+    # Assert that the method on the MOCKED REPOSITORY was called
+    mock_guild_repository.get_guild.assert_called_once_with(123)
 
 @pytest.mark.asyncio
-async def test_create_or_update_guild(mock_db_session):
-    with patch('database.crud.create_or_update_guild', new_callable=AsyncMock) as mock_create_or_update_guild:
-        guild_service = GuildService(mock_db_session)
-        await guild_service.create_or_update_guild(1, 2, 3, 4)
-        mock_create_or_update_guild.assert_called_once_with(mock_db_session, 1, 2, 3, 4)
+async def test_create_or_update_guild(mock_db_session): # mock_db_session is now unused but kept by fixture
+    # Create a mock for the repository
+    mock_guild_repository = AsyncMock(spec=IGuildRepository)
+
+    # Instantiate the service with the mocked repository
+    guild_service = GuildService(mock_guild_repository)
+    await guild_service.create_or_update_guild(1, 2, 3, 4)
+    # Assert that the method on the MOCKED REPOSITORY was called
+    mock_guild_repository.create_or_update_guild.assert_called_once_with(1, 2, 3, 4)
