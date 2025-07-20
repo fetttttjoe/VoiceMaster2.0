@@ -15,8 +15,11 @@ class ErrorHandlerCog(commands.Cog):
         elif isinstance(error, commands.NoPrivateMessage):
             await ctx.send("This command cannot be used in private messages.")
         else:
-            logging.error(f"An error occurred in command {ctx.command}: {error}")
+            # Check if the command exists before trying to access its name
+            command_name = ctx.command.name if ctx.command else "unknown"
+            logging.error(f"An error occurred in command {command_name}: {error}")
             await ctx.send("An unexpected error occurred. Please try again later.")
 
 async def setup(bot: commands.Bot):
+    """The entry point for loading the cog."""
     await bot.add_cog(ErrorHandlerCog(bot))
