@@ -80,6 +80,8 @@ class Guild(Base):
     # One-to-one relationship with GuildSettings, allowing access to default settings
     # `uselist=False` indicates a one-to-one relationship
     settings = relationship("GuildSettings", back_populates="guild", uselist=False)
+    audit_logs = relationship("AuditLogEntry", back_populates="guild")
+
 
 
 # --- Guild Settings Model ---
@@ -133,9 +135,11 @@ class AuditLogEntry(Base):
     __tablename__ = "audit_log_entries"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True) # Unique ID for each log entry
-    guild_id = Column(BigInteger, nullable=False, index=True) # The guild where the event occurred
+    guild_id = Column(BigInteger, ForeignKey("guilds.id"), nullable=False, index=True) # The guild where the event occurred
     user_id = Column(BigInteger, nullable=True) # Optional: User associated with the event
     channel_id = Column(BigInteger, nullable=True) # Optional: Channel associated with the event
     event_type = Column(String, nullable=False) # Type of event, stored as string from AuditLogEventType enum
     details = Column(String, nullable=True) # Optional: Detailed description of the event
     timestamp = Column(DateTime(timezone=True), server_default=func.now()) # Timestamp of the event, defaults to current UTC time
+
+    guild = relationship("Guild", back_populates="audit_logs")
