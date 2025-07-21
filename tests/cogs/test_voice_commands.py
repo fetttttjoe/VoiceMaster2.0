@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from discord.ext import commands
 import discord
+from discord import ui
 import asyncio
 from typing import cast, Callable, Any
 
@@ -14,6 +15,7 @@ from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
 from interfaces.audit_log_service import IAuditLogService
 from database.models import AuditLogEventType # For audit log events
+from views.setup_view import SetupView, SetupModal
 
 
 ##
@@ -319,15 +321,16 @@ async def test_limit_command(mock_get_session, mock_bot, mock_member, mock_ctx):
 @pytest.mark.asyncio
 @patch('database.database.db.get_session')
 async def test_setup_command(mock_get_session, mock_bot, mock_ctx):
-    """Tests the entire multi-step setup process."""
+    """Tests the entire multi-step setup process using the new View and Modal flow."""
     mock_get_session.return_value.__aenter__.return_value.add = AsyncMock()
-    
+
     # Create actual mocks for the services that will be injected
     mock_guild_service_instance = AsyncMock(spec=IGuildService)
-    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService) # Still need to pass this, even if not directly used by setup
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
     mock_audit_log_service_instance = AsyncMock(spec=IAuditLogService)
 
-    # Assign services to mock_bot (crucial for audit_decorator and other bot interactions)
+    # Assign services to mock_bot. This is important because the View/Modal gets the bot
+    # instance from the context and then accesses these services.
     mock_bot.guild_service = mock_guild_service_instance
     mock_bot.voice_channel_service = mock_voice_channel_service
     mock_bot.audit_log_service = mock_audit_log_service_instance
@@ -335,43 +338,71 @@ async def test_setup_command(mock_get_session, mock_bot, mock_ctx):
     # Pass the mock instances to the cog constructor
     cog = VoiceCommandsCog(mock_bot, mock_guild_service_instance, mock_voice_channel_service, mock_audit_log_service_instance)
 
-    # Mock bot.wait_for calls for user input during setup
-    mock_bot.wait_for.side_effect = [
-        AsyncMock(spec=discord.Message, content="Temp Channels"), # Response for category name
-        AsyncMock(spec=discord.Message, content="Join to Create") # Response for creation channel name
-    ]
-    
-    # Mock return values for discord.py interactions
-    mock_category = AsyncMock(spec=discord.CategoryChannel, id=777) # Give it an ID
+    # Mock return values for discord.py interactions that will happen inside the modal
+    mock_category = AsyncMock(spec=discord.CategoryChannel, id=777, name="Temp Channels")
     mock_ctx.guild.create_category.return_value = mock_category
-    mock_ctx.guild.create_voice_channel.return_value = AsyncMock(spec=discord.VoiceChannel, id=888) # Give it an ID
+    mock_ctx.guild.create_voice_channel.return_value = AsyncMock(spec=discord.VoiceChannel, id=888, name="Join to Create")
 
-    # Mock the return value for the guild service's create_or_update_guild
-    mock_guild_service_instance.create_or_update_guild.return_value = MagicMock(
-        guild_id=mock_ctx.guild.id,
-        voice_category_id=mock_category.id,
-        creation_channel_id=888 # The ID of the created voice channel
-    )
-    
+    # Get the setup command callback
     voice_command = next(cmd for cmd in cog.get_commands() if cmd.name == 'voice')
     assert isinstance(voice_command, commands.Group)
     setup_command = voice_command.get_command('setup')
     assert setup_command is not None
-
     callback = cast(Callable[..., Any], setup_command.callback)
+
+    # --- 1. Execute the command to get the initial View ---
     await callback(cog, mock_ctx)
 
+    # Assert that the initial message with the view was sent
+    mock_ctx.send.assert_called_once()
+    sent_view = mock_ctx.send.call_args.kwargs['view']
+    assert isinstance(sent_view, SetupView)
+
+    # --- 2. Simulate the user clicking the button in the View ---
+    button = sent_view.children[0]
+    assert isinstance(button, ui.Button)
+
+    # Create a mock interaction for the button click
+    mock_button_interaction = AsyncMock(spec=discord.Interaction)
+    mock_button_interaction.response = AsyncMock()
+
+    # Call the button's callback, which should trigger the modal
+    await button.callback(mock_button_interaction)
+
+    # --- 3. Simulate the user submitting the Modal ---
+    # Assert that the modal was sent and capture it
+    mock_button_interaction.response.send_modal.assert_called_once()
+    sent_modal = mock_button_interaction.response.send_modal.call_args.args[0]
+    assert isinstance(sent_modal, SetupModal)
+
+    # FIX: Replace the TextInput objects with mocks so we can set the value
+    sent_modal.category_name = MagicMock(spec=ui.TextInput)
+    sent_modal.channel_name = MagicMock(spec=ui.TextInput)
+    sent_modal.category_name.value = "Temp Channels"
+    sent_modal.channel_name.value = "Join to Create"
+
+    # Create a mock interaction for the modal submission
+    mock_modal_interaction = AsyncMock(spec=discord.Interaction)
+    mock_modal_interaction.guild = mock_ctx.guild
+    mock_modal_interaction.user = mock_ctx.author
+    # FIX: Ensure the response attribute is an AsyncMock
+    mock_modal_interaction.response = AsyncMock()
+
+    # Call the modal's on_submit method
+    await sent_modal.on_submit(mock_modal_interaction)
+
+    # --- 4. Assert that the final actions were performed ---
     # Assertions on mock Discord interactions
     mock_ctx.guild.create_category.assert_called_once_with(name="Temp Channels")
     mock_ctx.guild.create_voice_channel.assert_called_once_with(name="Join to Create", category=mock_category)
-    
+
     # Assertions on injected service mocks
     mock_guild_service_instance.create_or_update_guild.assert_called_once()
     mock_audit_log_service_instance.log_event.assert_called_once()
-    
-    # Assertions on ctx.send messages
-    assert mock_ctx.send.call_count >= 3
     assert mock_audit_log_service_instance.log_event.call_args.kwargs['event_type'] == AuditLogEventType.BOT_SETUP
+
+    # Assert that the final confirmation message was sent
+    mock_modal_interaction.response.send_message.assert_called_once()
 
 
 @pytest.mark.asyncio

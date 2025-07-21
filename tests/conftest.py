@@ -5,51 +5,17 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 import discord
 from discord.ext import commands
+
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
 from interfaces.audit_log_service import IAuditLogService
-
-
-@pytest.fixture
-def mock_bot():
-    """Fixture for a mocked bot instance."""
-    return AsyncMock(spec=commands.Bot)
-
-@pytest.fixture
-def mock_guild():
-    """Fixture for a mocked guild instance."""
-    guild = MagicMock(spec=discord.Guild)
-    guild.id = 12345
-    guild.owner_id = 67890
-    guild.default_role = MagicMock(spec=discord.Role)
-    return guild
-
-@pytest.fixture
-def mock_member(mock_guild):
-    """Fixture for a mocked member instance."""
-    member = MagicMock(spec=discord.Member)
-    member.id = 54321
-    member.display_name = "TestUser"
-    member.guild = mock_guild
-    member.voice = MagicMock(spec=discord.VoiceState)
-    member.voice.channel = MagicMock(spec=discord.VoiceChannel)
-    return member
-
-@pytest.fixture
-def mock_ctx(mock_guild, mock_member):
-    """Fixture for a mocked context object."""
-    ctx = AsyncMock(spec=commands.Context)
-    ctx.guild = mock_guild
-    ctx.author = mock_member
-    return ctx
-
-@pytest.fixture
-def mock_db_session():
-    """Fixture for a mocked database session."""
-    return AsyncMock()
+from interfaces.guild_repository import IGuildRepository
+from interfaces.voice_channel_repository import IVoiceChannelRepository
+from interfaces.user_settings_repository import IUserSettingsRepository
+from interfaces.audit_log_repository import IAuditLogRepository
 
 @pytest.fixture
 def mock_guild_service():
@@ -65,3 +31,70 @@ def mock_voice_channel_service():
 def mock_audit_log_service():
     """Fixture for a mocked AuditLogService instance."""
     return AsyncMock(spec=IAuditLogService)
+
+@pytest.fixture
+def mock_bot(mock_guild_service, mock_voice_channel_service, mock_audit_log_service):
+    """
+    Provides a mock bot instance with all necessary services attached,
+    simulating the real bot's dependency injection container.
+    """
+    bot = AsyncMock(spec=commands.Bot)
+    bot.guild_service = mock_guild_service
+    bot.voice_channel_service = mock_voice_channel_service
+    bot.audit_log_service = mock_audit_log_service
+    return bot
+
+@pytest.fixture
+def mock_guild():
+    """Fixture for a mocked guild instance."""
+    guild = AsyncMock(spec=discord.Guild)
+    guild.id = 12345
+    guild.owner_id = 67890
+    guild.default_role = MagicMock(spec=discord.Role)
+    return guild
+
+@pytest.fixture
+def mock_member(mock_guild):
+    """Fixture for a mocked member instance."""
+    member = AsyncMock(spec=discord.Member)
+    member.id = 54321
+    member.display_name = "TestUser"
+    member.guild = mock_guild
+    member.voice = AsyncMock(spec=discord.VoiceState)
+    member.voice.channel = AsyncMock(spec=discord.VoiceChannel)
+    return member
+
+@pytest.fixture
+def mock_ctx(mock_guild, mock_member, mock_bot):
+    """
+    Provides a complete mock context, including a bot with services attached.
+    This is the primary context fixture to use for most command/view tests.
+    """
+    ctx = AsyncMock(spec=commands.Context)
+    ctx.guild = mock_guild
+    ctx.author = mock_member
+    ctx.bot = mock_bot
+    return ctx
+
+@pytest.fixture
+def mock_db_session():
+    """Fixture for a mocked database session."""
+    return AsyncMock()
+
+# --- Repository Fixtures for Service Tests ---
+
+@pytest.fixture
+def mock_guild_repository():
+    return AsyncMock(spec=IGuildRepository)
+
+@pytest.fixture
+def mock_voice_channel_repository():
+    return AsyncMock(spec=IVoiceChannelRepository)
+
+@pytest.fixture
+def mock_user_settings_repository():
+    return AsyncMock(spec=IUserSettingsRepository)
+
+@pytest.fixture
+def mock_audit_log_repository():
+    return AsyncMock(spec=IAuditLogRepository)
