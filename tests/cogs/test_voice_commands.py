@@ -36,6 +36,7 @@ def mock_ctx(mock_bot): # Pass mock_bot as a fixture to mock_ctx
     ctx.author.guild = ctx.guild
     ctx.guild.id = 12345
     ctx.guild.default_role = MagicMock(spec=discord.Role)
+    ctx.prefix = "."
     # No need to mock ctx.bot.get_channel or get_user here directly,
     # as mock_bot fixture itself will have these if needed.
     return ctx
@@ -113,7 +114,7 @@ async def test_lock_command(mock_get_session, mock_bot, mock_member, mock_ctx):
     await callback(cog, mock_ctx)
     
     mock_member.voice.channel.set_permissions.assert_called_once_with(mock_ctx.guild.default_role, connect=False)
-    mock_ctx.send.assert_called_with("🔒 Channel locked.")
+    mock_ctx.send.assert_called_with("🔒 Channel locked.", ephemeral=True)
     # Assert on the *injected* mock_audit_log_service
     mock_audit_log_service.log_event.assert_called_once()
     assert mock_audit_log_service.log_event.call_args.kwargs['event_type'] == AuditLogEventType.CHANNEL_LOCKED
@@ -149,7 +150,7 @@ async def test_unlock_command(mock_get_session, mock_bot, mock_member, mock_ctx)
     await callback(cog, mock_ctx)
 
     mock_member.voice.channel.set_permissions.assert_called_once_with(mock_ctx.guild.default_role, connect=True)
-    mock_ctx.send.assert_called_with("🔓 Channel unlocked.")
+    mock_ctx.send.assert_called_with("🔓 Channel unlocked.", ephemeral=True)
     # Assert on the *injected* mock_audit_log_service
     mock_audit_log_service.log_event.assert_called_once()
     assert mock_audit_log_service.log_event.call_args.kwargs['event_type'] == AuditLogEventType.CHANNEL_UNLOCKED
@@ -418,7 +419,7 @@ async def test_list_command(mock_get_session, mock_bot, mock_ctx):
         MagicMock(channel_id=2, owner_id=20)
     ]
     # Mock bot.get_channel and bot.get_user for the list command's internal logic
-    mock_bot.get_channel.return_value = AsyncMock(spec=discord.VoiceChannel, name="Channel1", mention="<#1>")
+    mock_ctx.guild.get_channel.return_value = AsyncMock(spec=discord.VoiceChannel, name="Channel1", mention="<#1>", guild=mock_ctx.guild)
     mock_bot.get_user.side_effect = [AsyncMock(spec=discord.User, mention="<@10>"), AsyncMock(spec=discord.User, mention="<@20>")]
 
 

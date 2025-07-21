@@ -2,7 +2,6 @@ from typing import Optional, List, cast
 from sqlalchemy.ext.asyncio import AsyncSession
 from database import crud
 from database.models import Guild, VoiceChannel, UserSettings, AuditLogEntry, AuditLogEventType
-from utils.db_helpers import is_db_value_equal # Import the helper for safe comparisons
 
 # --- Repository Implementations ---
 
@@ -71,13 +70,13 @@ class VoiceChannelRepository:
 
     async def get_by_owner(self, owner_id: int) -> Optional[VoiceChannel]:
         """
-        Retrieves a VoiceChannel by its owner's ID.
+        Retrieves a VoiceChannel entry by its owner's ID.
         """
         return await crud.get_voice_channel_by_owner(self.db, owner_id)
 
     async def get_by_channel_id(self, channel_id: int) -> Optional[VoiceChannel]:
         """
-        Retrieves a VoiceChannel by its channel ID.
+        Retrieves a VoiceChannel entry by its channel ID.
         """
         return await crud.get_voice_channel(self.db, channel_id)
 
