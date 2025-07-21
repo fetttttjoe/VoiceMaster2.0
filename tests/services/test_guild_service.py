@@ -7,10 +7,10 @@ from interfaces.guild_repository import IGuildRepository
 
 
 @pytest.mark.asyncio
-async def test_get_guild_config(mock_db_session): # mock_db_session is now unused but kept by fixture
-    # Create a mock for the repository
-    mock_guild_repository = AsyncMock(spec=IGuildRepository)
-
+async def test_get_guild_config(mock_guild_repository):
+    """
+    Tests that get_guild_config calls get_guild on its repository.
+    """
     # Instantiate the service with the mocked repository
     guild_service = GuildService(mock_guild_repository)
     await guild_service.get_guild_config(123)
@@ -18,10 +18,10 @@ async def test_get_guild_config(mock_db_session): # mock_db_session is now unuse
     mock_guild_repository.get_guild.assert_called_once_with(123)
 
 @pytest.mark.asyncio
-async def test_create_or_update_guild(mock_db_session): # mock_db_session is now unused but kept by fixture
-    # Create a mock for the repository
-    mock_guild_repository = AsyncMock(spec=IGuildRepository)
-
+async def test_create_or_update_guild(mock_guild_repository):
+    """
+    Tests that create_or_update_guild calls create_or_update_guild on its repository.
+    """
     # Instantiate the service with the mocked repository
     guild_service = GuildService(mock_guild_repository)
     await guild_service.create_or_update_guild(1, 2, 3, 4)
