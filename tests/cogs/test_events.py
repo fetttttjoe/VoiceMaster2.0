@@ -28,10 +28,16 @@ async def test_on_voice_state_update_routes_to_creation(mock_bot):
 
     # Pass the mocks to the EventsCog constructor
     cog = EventsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
-    member = AsyncMock()
+    member = AsyncMock(spec=discord.Member)
     member.guild.id = 123
-    before = AsyncMock(channel=None)
-    after = AsyncMock(channel=MagicMock(id=456))
+    # pretent to not be a bot
+    member.bot = False
+    before = AsyncMock(spec=discord.VoiceState, channel=None)
+    
+    # Correctly mock the after state with a channel that has a simple integer ID
+    after = AsyncMock(spec=discord.VoiceState)
+    after.channel = AsyncMock(spec=discord.VoiceChannel)
+    after.channel.id = 456
 
     guild_config = Guild(creation_channel_id=456)
 
@@ -57,10 +63,16 @@ async def test_on_voice_state_update_routes_to_leave(mock_bot):
     mock_bot.audit_log_service = mock_audit_log_service
 
     cog = EventsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
-    member = AsyncMock()
+    member = AsyncMock(spec=discord.Member)
     member.guild.id = 123
-    before = AsyncMock(channel=MagicMock(id=789))
-    after = AsyncMock(channel=None)
+    member.bot = False
+    
+    # Correctly mock the before state with a channel that has a simple integer ID
+    before = AsyncMock(spec=discord.VoiceState)
+    before.channel = AsyncMock(spec=discord.VoiceChannel)
+    before.channel.id = 789
+    
+    after = AsyncMock(spec=discord.VoiceState, channel=None)
 
     # creation_channel_id is different from the channel being left
     guild_config = Guild(creation_channel_id=456)

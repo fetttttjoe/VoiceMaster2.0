@@ -1,12 +1,17 @@
 import sys
 import os
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 import discord
 from discord.ext import commands
-
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from interfaces.guild_service import IGuildService
+from interfaces.voice_channel_service import IVoiceChannelService
+from interfaces.audit_log_service import IAuditLogService
+
 
 @pytest.fixture
 def mock_bot():
@@ -45,3 +50,18 @@ def mock_ctx(mock_guild, mock_member):
 def mock_db_session():
     """Fixture for a mocked database session."""
     return AsyncMock()
+
+@pytest.fixture
+def mock_guild_service():
+    """Fixture for a mocked GuildService instance."""
+    return AsyncMock(spec=IGuildService)
+
+@pytest.fixture
+def mock_voice_channel_service():
+    """Fixture for a mocked VoiceChannelService instance."""
+    return AsyncMock(spec=IVoiceChannelService)
+
+@pytest.fixture
+def mock_audit_log_service():
+    """Fixture for a mocked AuditLogService instance."""
+    return AsyncMock(spec=IAuditLogService)
