@@ -28,13 +28,13 @@ class Container:
     """
 
     def __init__(self, session: AsyncSession):
-        self.session = session
+        self._session = session
 
         # Repositories
-        self.guild_repository: IGuildRepository = GuildRepository(self.session)
-        self.voice_channel_repository: IVoiceChannelRepository = VoiceChannelRepository(self.session)
-        self.user_settings_repository: IUserSettingsRepository = UserSettingsRepository(self.session)
-        self.audit_log_repository: IAuditLogRepository = AuditLogRepository(self.session)
+        self.guild_repository: IGuildRepository = GuildRepository(self._session)
+        self.voice_channel_repository: IVoiceChannelRepository = VoiceChannelRepository(self._session)
+        self.user_settings_repository: IUserSettingsRepository = UserSettingsRepository(self._session)
+        self.audit_log_repository: IAuditLogRepository = AuditLogRepository(self._session)
 
         # Services
         self.guild_service: IGuildService = GuildService(self.guild_repository)
@@ -42,4 +42,3 @@ class Container:
             self.voice_channel_repository, self.user_settings_repository
         )
         self.audit_log_service: IAuditLogService = AuditLogService(self.audit_log_repository)
-
