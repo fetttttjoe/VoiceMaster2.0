@@ -63,6 +63,7 @@ class AuditLogEventType(Enum):
     CHANNEL_CREATED = "CHANNEL_CREATED"
     CHANNEL_CREATION_FAILED = "CHANNEL_CREATION_FAILED"
 
+    UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 # --- Guild Model ---
 class Guild(Base):

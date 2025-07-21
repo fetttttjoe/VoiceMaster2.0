@@ -6,7 +6,7 @@ from discord import ui  # For Discord UI components like Buttons and Selects
 from discord.ext import commands
 from discord.ext.commands import Context
 # `cast` for explicit type hints to help Pylance
-from typing import Optional, Union, cast
+from typing import Optional, cast
 
 from database.models import AuditLogEventType  # Enum for audit log event types
 # Custom decorator for automatic audit logging
@@ -14,6 +14,9 @@ from services.audit_decorator import audit_log
 from utils.checks import is_in_voice_channel, is_channel_owner  # Custom command checks
 # Helper for safe database value comparison
 from utils.db_helpers import is_db_value_equal
+# Import the new views
+from views.voice_commands_views import RenameView, SelectView
+from views.setup_view import SetupView
 
 # Abstractions for dependency injection
 from interfaces.guild_service import IGuildService
@@ -43,13 +46,13 @@ class VoiceCommandsCog(commands.Cog):
             voice_channel_service: Service for voice channel management.
             audit_log_service: Service for logging audit events.
         """
-        self.bot = bot
-        self.guild_service = guild_service
-        self.voice_channel_service = voice_channel_service
-        self.audit_log_service = audit_log_service
+        self._bot = bot
+        self._guild_service = guild_service
+        self._voice_channel_service = voice_channel_service
+        self._audit_log_service = audit_log_service
         # Store active UI views to manage their lifecycle and prevent memory leaks.
         # This will be useful if we create persistent views or need to clean up.
-        self.active_views: dict[int, ui.View] = {}
+        self._active_views: dict[int, ui.View] = {}
 
     @commands.hybrid_group(invoke_without_command=True)
     async def voice(self, ctx: Context):
@@ -96,94 +99,14 @@ class VoiceCommandsCog(commands.Cog):
         await ctx.send(embed=embed)
 
     @voice.command(name="setup")
-    # Requires administrator permissions to run
     @commands.has_guild_permissions(administrator=True)
-    @commands.guild_only()  # Can only be used in a Discord guild (server), not in DMs
+    @commands.guild_only()
     async def setup(self, ctx: Context):
         """
         Sets up the voice channel creation category and channel for the first time.
-
-        This command guides an administrator through creating a dedicated category
-        for temporary voice channels and a "join to create" voice channel.
-        It then saves these configurations to the database.
         """
-        guild = ctx.guild  # Get the guild object from the context
-        if not guild:
-            # This check is technically redundant due to @commands.guild_only(),
-            # but serves as a type guard for static analysis and explicit safety.
-            logging.warning(
-                f"Setup command invoked outside a guild context by {ctx.author.id}.")
-            return await ctx.send("This command can only be used in a server.", ephemeral=True)
-
-        # Define a check function for `bot.wait_for` to ensure responses come from
-        # the same author in the same channel.
-        def check(m: discord.Message) -> bool:
-            return m.author == ctx.author and m.channel == ctx.channel
-
-        await ctx.send("I'll guide you through setting up temporary voice channels. "
-                       "First, enter the name for the new **category** where temporary channels will be created:")
-        try:
-            # Wait for the user's response for the category name with a timeout.
-            category_msg = await self.bot.wait_for('message', check=check, timeout=60.0)
-            # Create the Discord category channel.
-            category = await guild.create_category(name=category_msg.content)
-            logging.info(
-                f"Created category '{category.name}' ({category.id}) in guild {guild.id}.")
-
-            await ctx.send("Great! Now, enter the name for the **voice channel** users will join to create their own (e.g., 'Join to Create'):")
-            # Wait for the user's response for the creation channel name.
-            channel_msg = await self.bot.wait_for('message', check=check, timeout=60.0)
-            # Create the Discord voice channel within the newly created category.
-            channel = await guild.create_voice_channel(name=channel_msg.content, category=category)
-            logging.info(
-                f"Created creation channel '{channel.name}' ({channel.id}) in category {category.id}.")
-
-            # Ensure guild owner ID is available for database storage.
-            if not guild.owner_id:
-                logging.error(
-                    f"Could not determine owner_id for guild {guild.id} during setup.")
-                return await ctx.send("Could not determine the server owner. Setup aborted.", ephemeral=True)
-
-            # Store or update the guild configuration in the database.
-            await self.guild_service.create_or_update_guild(guild.id, guild.owner_id, category.id, channel.id)
-            logging.info(
-                f"Guild {guild.id} setup configuration saved to database.")
-
-            # Log the successful bot setup event.
-            await self.audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.BOT_SETUP,
-                user_id=ctx.author.id,
-                details=(
-                    f"Bot setup complete. Category: '{category.name}' ({category.id}), "
-                    f"Creation Channel: '{channel.name}' ({channel.id})."
-                )
-            )
-
-            await ctx.send(f"✅ Setup complete! Users can now join '{channel.name}' to create their own channels.")
-
-        except asyncio.TimeoutError:
-            # Handle cases where the user does not respond within the timeout period.
-            logging.warning(
-                f"Setup timed out for user {ctx.author.id} in guild {guild.id}.")
-            await ctx.send("Setup timed out. Please try again.", ephemeral=True)
-            await self.audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.SETUP_TIMED_OUT,
-                user_id=ctx.author.id,
-                details="Bot setup timed out due to no response."
-            )
-        except Exception as e:
-            # Catch any other unexpected errors during the setup process.
-            logging.error(
-                f"An unexpected error occurred during setup in guild {guild.id} by {ctx.author.id}: {e}", exc_info=True)
-            await ctx.send(f"An error occurred during setup: {e}. Please check logs.", ephemeral=True)
-            await self.audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.SETUP_ERROR,
-                user_id=ctx.author.id,
-                details=f"An error occurred during setup: {e}"
-            )
+        view = SetupView(ctx)
+        await ctx.send("Click the button to begin the setup process.", view=view)
 
     @voice.group(name="edit", invoke_without_command=True)
     @commands.has_guild_permissions(administrator=True)
@@ -209,166 +132,15 @@ class VoiceCommandsCog(commands.Cog):
                 f"Edit rename command invoked outside a guild context by {ctx.author.id}.")
             return await ctx.send("This command can only be used in a server.", ephemeral=True)
 
-        guild_config = await self.guild_service.get_guild_config(guild.id)
+        guild_config = await self._guild_service.get_guild_config(guild.id)
         if not guild_config:
             # Bot must be set up before attempting to rename configured channels/categories.
             return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
 
-        # Create UI buttons for renaming options.
-        view = ui.View(timeout=180.0)  # View times out after 3 minutes
-        rename_channel_btn = ui.Button(
-            label="Rename 'Join' Channel", style=discord.ButtonStyle.primary, emoji="✏️")
-        rename_category_btn = ui.Button(
-            label="Rename Category", style=discord.ButtonStyle.primary, emoji="✏️")
-
-        async def rename_channel_callback(interaction: discord.Interaction):
-            """Callback for the 'Rename Join Channel' button."""
-            # Ensure only the original invoker can interact.
-            if interaction.user != ctx.author:
-                return await interaction.response.send_message("You cannot interact with this menu.", ephemeral=True)
-
-            # Send an ephemeral message asking for the new name.
-            await interaction.response.send_message("Please type the new name for the 'Join to Create' channel:", ephemeral=True)
-
-            try:
-                # Wait for the user's message containing the new name.
-                msg = await self.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=60.0)
-
-                # Retrieve the latest guild config in case it changed since button press.
-                current_guild_config = await self.guild_service.get_guild_config(guild.id)
-                # Ensure current_guild_config is not None before proceeding.
-                if current_guild_config and isinstance(current_guild_config.creation_channel_id, int):
-                    # Assign to local variable
-                    creation_channel_id = current_guild_config.creation_channel_id
-                    creation_channel = guild.get_channel(creation_channel_id)
-
-                    if creation_channel and isinstance(creation_channel, discord.VoiceChannel):
-                        old_name = creation_channel.name
-                        # Perform the rename on Discord
-                        await creation_channel.edit(name=msg.content)
-                        logging.info(
-                            f"Creation channel '{old_name}' renamed to '{msg.content}' in guild {guild.id}.")
-                        await msg.reply(f"✅ Channel renamed to **{msg.content}**.", delete_after=10)
-
-                        await self.audit_log_service.log_event(
-                            guild_id=guild.id,
-                            event_type=AuditLogEventType.CHANNEL_RENAMED,
-                            user_id=ctx.author.id,
-                            channel_id=creation_channel.id,
-                            details=f"Creation channel renamed from '{old_name}' to '{msg.content}'."
-                        )
-                    else:
-                        logging.warning(
-                            f"Configured creation channel {creation_channel_id} not found for renaming in guild {guild.id}.")
-                        await interaction.followup.send("Error: Configured 'Join to Create' channel not found or is no longer a voice channel.", ephemeral=True)
-                else:
-                    logging.warning(
-                        f"Invalid creation_channel_id in guild {guild.id} during rename attempt: {current_guild_config.creation_channel_id if current_guild_config else 'None'}.")
-                    await interaction.followup.send("Error: Invalid creation channel configured. Please run setup again.", ephemeral=True)
-                # Delete the user's input message for cleanliness.
-                await msg.delete()
-            except asyncio.TimeoutError:
-                logging.warning(
-                    f"Renaming 'Join' channel timed out for {ctx.author.id} in guild {guild.id}.")
-                await interaction.followup.send("Rename timed out. Please try again.", ephemeral=True)
-                await self.audit_log_service.log_event(
-                    guild_id=guild.id,
-                    event_type=AuditLogEventType.CHANNEL_RENAME_TIMED_OUT,
-                    user_id=ctx.author.id,
-                    details="Renaming 'Join' channel timed out."
-                )
-            except Exception as e:
-                logging.error(
-                    f"Error renaming 'Join' channel in guild {guild.id} by {ctx.author.id}: {e}", exc_info=True)
-                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
-                await self.audit_log_service.log_event(
-                    guild_id=guild.id,
-                    event_type=AuditLogEventType.CHANNEL_RENAME_ERROR,
-                    user_id=ctx.author.id,
-                    details=f"An error occurred during setup: {e}"
-                )
-            finally:
-                # Stop the view after an action is completed or times out.
-                view.stop()
-
-        async def rename_category_callback(interaction: discord.Interaction):
-            """Callback for the 'Rename Category' button."""
-            if interaction.user != ctx.author:
-                return await interaction.response.send_message("You cannot interact with this menu.", ephemeral=True)
-
-            await interaction.response.send_message("Please type the new name for the temporary channels category:", ephemeral=True)
-            try:
-                msg = await self.bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel, timeout=60.0)
-
-                current_guild_config = await self.guild_service.get_guild_config(guild.id)
-                # Ensure current_guild_config is not None before proceeding.
-                if current_guild_config and isinstance(current_guild_config.voice_category_id, int):
-                    voice_category_id = current_guild_config.voice_category_id  # Assign to local variable
-                    category = guild.get_channel(voice_category_id)
-
-                    if category and isinstance(category, discord.CategoryChannel):
-                        old_name = category.name
-                        # Perform the rename on Discord
-                        await category.edit(name=msg.content)
-                        logging.info(
-                            f"Category '{old_name}' renamed to '{msg.content}' in guild {guild.id}.")
-                        await msg.reply(f"✅ Category renamed to **{msg.content}**.", delete_after=10)
-
-                        await self.audit_log_service.log_event(
-                            guild_id=guild.id,
-                            event_type=AuditLogEventType.CATEGORY_RENAMED,
-                            user_id=ctx.author.id,
-                            channel_id=category.id,
-                            details=f"Category renamed from '{old_name}' to '{msg.content}'."
-                        )
-                    else:
-                        logging.warning(
-                            f"Configured voice category {voice_category_id} not found for renaming in guild {guild.id}.")
-                        await interaction.followup.send("Error: Configured temporary channels category not found or is no longer a category.", ephemeral=True)
-                else:
-                    logging.warning(
-                        f"Invalid voice_category_id in guild {guild.id} during rename attempt: {current_guild_config.voice_category_id if current_guild_config else 'None'}.")
-                    await interaction.followup.send("Error: Invalid voice category configured. Please run setup again.", ephemeral=True)
-                await msg.delete()
-            except asyncio.TimeoutError:
-                logging.warning(
-                    f"Renaming category timed out for {ctx.author.id} in guild {guild.id}.")
-                await interaction.followup.send("Rename timed out. Please try again.", ephemeral=True)
-                await self.audit_log_service.log_event(
-                    guild_id=guild.id,
-                    event_type=AuditLogEventType.CATEGORY_RENAME_TIMED_OUT,
-                    user_id=ctx.author.id,
-                    details="Renaming category timed out."
-                )
-            except Exception as e:
-                logging.error(
-                    f"Error renaming category in guild {guild.id} by {ctx.author.id}: {e}", exc_info=True)
-                await interaction.followup.send(f"An error occurred: {e}", ephemeral=True)
-                await self.audit_log_service.log_event(
-                    guild_id=guild.id,
-                    event_type=AuditLogEventType.CATEGORY_RENAME_ERROR,
-                    user_id=ctx.author.id,
-                    details=f"An error occurred during setup: {e}"
-                )
-            finally:
-                # Stop the view after an action is completed or times out.
-                view.stop()
-
-        rename_channel_btn.callback = rename_channel_callback
-        rename_category_btn.callback = rename_category_callback
-        view.add_item(rename_channel_btn)
-        view.add_item(rename_category_btn)
-
-        # Store view to manage its lifecycle
-        self.active_views[ctx.channel.id] = view
+        view = RenameView(ctx)
         await ctx.send("Press a button to start renaming:", view=view)
 
-        # Remove view from active_views when it stops.
-        await view.wait()
-        if ctx.channel.id in self.active_views:
-            del self.active_views[ctx.channel.id]
-
-    @voice.command(name="select")
+    @edit.command(name="select")
     @commands.has_guild_permissions(administrator=True)
     @commands.guild_only()
     async def edit_select(self, ctx: Context):
@@ -388,119 +160,22 @@ class VoiceCommandsCog(commands.Cog):
                 f"Guild {guild.id} has no owner_id, cannot proceed with edit select.")
             return await ctx.send("Could not determine the server owner. Cannot update configuration.", ephemeral=True)
 
-        guild_config = await self.guild_service.get_guild_config(guild.id)
+        guild_config = await self._guild_service.get_guild_config(guild.id)
         if not guild_config:
             return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
 
-        view = ui.View(timeout=180.0)
-
-        # Prepare options for selecting a "Join to Create" channel.
-        # Only list voice channels that are part of a category to keep options relevant.
         voice_channels = [c for c in guild.voice_channels if c.category]
         if not voice_channels:
             await ctx.send("No voice channels with categories found to select from.", ephemeral=True)
             return
-
-        channel_options = [discord.SelectOption(
-            label=c.name, value=str(c.id)) for c in voice_channels]
-        # Max 25 options per select menu. If more, implement pagination or search.
-        if len(channel_options) > 25:
-            # Truncate for simplicity for now
-            channel_options = channel_options[:25]
-        channel_select = ui.Select(
-            placeholder="Select a new 'Join to Create' channel...", options=channel_options)
-
-        # Prepare options for selecting a new temporary channels category.
+            
         categories = guild.categories
         if not categories:
             await ctx.send("No categories found to select from.", ephemeral=True)
             return
 
-        category_options = [discord.SelectOption(
-            label=cat.name, value=str(cat.id)) for cat in categories]
-        if len(category_options) > 25:
-            # Truncate for simplicity for now
-            category_options = category_options[:25]
-        category_select = ui.Select(
-            placeholder="Select a new category for temp channels...", options=category_options)
-
-        async def channel_callback(interaction: discord.Interaction):
-            """Callback for the 'Select Channel' dropdown."""
-            await interaction.response.defer(ephemeral=True)  # Defer to show "Bot is thinking..."
-            if interaction.user != ctx.author or not guild.owner_id:
-                return await interaction.followup.send("You cannot interact with this menu.", ephemeral=True)
-
-            # Re-fetch config to ensure it's up-to-date before updating.
-            current_guild_config = await self.guild_service.get_guild_config(guild.id)
-            # Ensure current_guild_config is not None before proceeding.
-            if not current_guild_config or not isinstance(current_guild_config.voice_category_id, int):
-                logging.error(
-                    f"Error: Could not find current config for guild {guild.id} or voice_category_id is invalid.")
-                return await interaction.followup.send("Error: Could not find current configuration or voice category is invalid. Please try setup again.", ephemeral=True)
-
-            old_channel_id = current_guild_config.creation_channel_id
-            # Get the selected channel ID
-            new_channel_id = int(channel_select.values[0])
-
-            # Update the guild configuration in the database.
-            await self.guild_service.create_or_update_guild(guild.id, guild.owner_id, current_guild_config.voice_category_id, new_channel_id)
-            logging.info(
-                f"Creation channel updated from {old_channel_id} to {new_channel_id} in guild {guild.id}.")
-            await interaction.followup.send(f"✅ 'Join to Create' channel updated to <#{new_channel_id}>!")
-
-            await self.audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.CREATION_CHANNEL_CHANGED,
-                user_id=ctx.author.id,
-                channel_id=new_channel_id,
-                details=f"'Join to Create' channel changed from {old_channel_id} to {new_channel_id}."
-            )
-            view.stop()  # Stop the view so it can be cleaned up.
-
-        async def category_callback(interaction: discord.Interaction):
-            """Callback for the 'Select Category' dropdown."""
-            await interaction.response.defer(ephemeral=True)
-            if interaction.user != ctx.author or not guild.owner_id:
-                return await interaction.followup.send("You cannot interact with this menu.", ephemeral=True)
-
-            current_config = await self.guild_service.get_guild_config(guild.id)
-            # Ensure current_config is not None before proceeding.
-            if not current_config or not isinstance(current_config.creation_channel_id, int):
-                logging.error(
-                    f"Error: Could not find current config for guild {guild.id} or creation_channel_id is invalid.")
-                return await interaction.followup.send("Error: Could not find current configuration or creation channel is invalid. Please try setup again.", ephemeral=True)
-
-            old_category_id = current_config.voice_category_id
-            # Get the selected category ID
-            new_category_id = int(category_select.values[0])
-
-            # Update the guild configuration in the database.
-            await self.guild_service.create_or_update_guild(guild.id, guild.owner_id, new_category_id, current_config.creation_channel_id)
-            logging.info(
-                f"Voice category updated from {old_category_id} to {new_category_id} in guild {guild.id}.")
-            await interaction.followup.send(f"✅ Category for temporary channels updated to <#{new_category_id}>!")
-
-            await self.audit_log_service.log_event(
-                guild_id=guild.id,
-                event_type=AuditLogEventType.VOICE_CATEGORY_CHANGED,
-                user_id=ctx.author.id,
-                channel_id=new_category_id,
-                details=f"Voice category changed from {old_category_id} to {new_category_id}."
-            )
-            view.stop()  # Stop the view.
-
-        channel_select.callback = channel_callback
-        category_select.callback = category_callback
-
-        view.add_item(channel_select)
-        view.add_item(category_select)
-
-        self.active_views[ctx.channel.id] = view
+        view = SelectView(ctx, voice_channels, categories)
         await ctx.send("Use the dropdowns to select a new channel or category:", view=view, ephemeral=True)
-
-        await view.wait()
-        if ctx.channel.id in self.active_views:
-            del self.active_views[ctx.channel.id]
 
     @voice.command(name="list")
     @commands.has_guild_permissions(administrator=True)
@@ -517,8 +192,9 @@ class VoiceCommandsCog(commands.Cog):
             return await ctx.send("This command can only be used in a server.", ephemeral=True)
 
         logging.info(f"DEBUG: list_channels called in guild {guild.id}")
-        all_channels = await self.guild_service.get_all_voice_channels()
-        logging.info(f"DEBUG: All voice channels from DB: {len(all_channels)} entries.")
+        all_channels = await self._guild_service.get_all_voice_channels()
+        logging.info(
+            f"DEBUG: All voice channels from DB: {len(all_channels)} entries.")
 
         # Filter channels to only those belonging to the current guild
         # Assuming VoiceChannel model has guild_id, or we need to fetch guild-specific channels.
@@ -527,24 +203,30 @@ class VoiceCommandsCog(commands.Cog):
         # For now, filter after fetching.
         guild_channels = []
         for vc in all_channels:
-            logging.info(f"DEBUG: Processing VC: {vc.channel_id} (owner: {vc.owner_id})")
+            logging.info(
+                f"DEBUG: Processing VC: {vc.channel_id} (owner: {vc.owner_id})")
             if isinstance(vc.channel_id, int):
                 channel_obj = guild.get_channel(vc.channel_id)
                 # Check if the channel object exists and is indeed a voice channel within this guild
                 # Added channel_obj.guild check
-                logging.info(f"DEBUG: Discord channel obj for {vc.channel_id}: {channel_obj.id if channel_obj else 'None'}")
+                logging.info(
+                    f"DEBUG: Discord channel obj for {vc.channel_id}: {channel_obj.id if channel_obj else 'None'}")
                 if channel_obj and isinstance(channel_obj, discord.VoiceChannel) and channel_obj.guild and is_db_value_equal(channel_obj.guild.id, guild.id):
-                    logging.info(f"DEBUG: Found relevant channel: {channel_obj.id} in guild {channel_obj.guild.id}")
+                    logging.info(
+                        f"DEBUG: Found relevant channel: {channel_obj.id} in guild {channel_obj.guild.id}")
                     guild_channels.append(vc)
                 else:
-                    logging.info(f"DEBUG: Channel {vc.channel_id} not relevant for this guild or not a voice channel.")
+                    logging.info(
+                        f"DEBUG: Channel {vc.channel_id} not relevant for this guild or not a voice channel.")
             else:
-                logging.info(f"DEBUG: vc.channel_id is not an int: {vc.channel_id}")
+                logging.info(
+                    f"DEBUG: vc.channel_id is not an int: {vc.channel_id}")
 
-
-        logging.info(f"DEBUG: Filtered guild_channels count: {len(guild_channels)}")
+        logging.info(
+            f"DEBUG: Filtered guild_channels count: {len(guild_channels)}")
         if not guild_channels:
-            logging.info(f"DEBUG: No active temporary channels found for guild {guild.id}. Sending ephemeral message.")
+            logging.info(
+                f"DEBUG: No active temporary channels found for guild {guild.id}. Sending ephemeral message.")
             await ctx.send("There are no active temporary channels managed by VoiceMaster in this guild.", ephemeral=True)
             # Audit log is handled by the decorator for this case as well.
             return
@@ -578,7 +260,8 @@ class VoiceCommandsCog(commands.Cog):
         embed.description = "\n".join(
             description_lines) if description_lines else "No active temporary channels found."
         await ctx.send(embed=embed)
-        logging.info(f"DEBUG: Sent embed for active channels. Embed description length: {len(embed.description)}")
+        logging.info(
+            f"DEBUG: Sent embed for active channels. Embed description length: {len(embed.description)}")
         # Audit log is handled by the decorator.
 
     @voice.command(name="lock")
@@ -677,7 +360,7 @@ class VoiceCommandsCog(commands.Cog):
         channel = cast(discord.VoiceChannel, voice_state.channel)
 
         # Retrieve the channel from the database to check if it's a bot-managed temporary channel.
-        vc = await self.voice_channel_service.get_voice_channel(channel.id)
+        vc = await self._voice_channel_service.get_voice_channel(channel.id)
         if not vc:
             return await ctx.send("This channel is not a temporary channel managed by VoiceMaster.", ephemeral=True)
 
@@ -694,7 +377,7 @@ class VoiceCommandsCog(commands.Cog):
             return await ctx.send(f"The owner, {owner.mention}, is still in the channel. You cannot claim it.", ephemeral=True)
 
         # Update the channel's owner in the database to the commanding user's ID.
-        await self.voice_channel_service.update_voice_channel_owner(channel.id, author.id)
+        await self._voice_channel_service.update_voice_channel_owner(channel.id, author.id)
 
         # Grant the new owner management permissions for the channel.
         await channel.set_permissions(author, manage_channels=True, manage_roles=True)
@@ -717,10 +400,10 @@ class VoiceCommandsCog(commands.Cog):
         guild = cast(discord.Guild, ctx.guild)
 
         # First, update the user's preferred default channel name in the database.
-        await self.voice_channel_service.update_user_channel_name(author.id, new_name)
+        await self._voice_channel_service.update_user_channel_name(author.id, new_name)
 
         # Check if the user currently owns an active temporary channel and is in it.
-        vc = await self.voice_channel_service.get_voice_channel_by_owner(author.id)
+        vc = await self._voice_channel_service.get_voice_channel_by_owner(author.id)
         if (
             vc and
             author.voice and
@@ -739,7 +422,7 @@ class VoiceCommandsCog(commands.Cog):
                 f"Live channel {voice_channel_obj.id} renamed from '{old_channel_name}' to '{new_name}' by owner {author.id}.")
 
             # Log the live channel name change separately.
-            await self.audit_log_service.log_event(
+            await self._audit_log_service.log_event(
                 guild_id=guild.id,
                 event_type=AuditLogEventType.LIVE_CHANNEL_NAME_CHANGED,
                 user_id=author.id,
@@ -773,10 +456,10 @@ class VoiceCommandsCog(commands.Cog):
             return await ctx.send("Please provide a limit between 0 (unlimited) and 99.", ephemeral=True)
 
         # First, update the user's preferred default channel limit in the database.
-        await self.voice_channel_service.update_user_channel_limit(author.id, new_limit)
+        await self._voice_channel_service.update_user_channel_limit(author.id, new_limit)
 
         # Check if the user currently owns an active temporary channel and is in it.
-        vc = await self.voice_channel_service.get_voice_channel_by_owner(author.id)
+        vc = await self._voice_channel_service.get_voice_channel_by_owner(author.id)
         if (
             vc and
             author.voice and
@@ -795,7 +478,7 @@ class VoiceCommandsCog(commands.Cog):
                 f"Live channel {voice_channel_obj.id} limit changed from {old_limit} to {new_limit} by owner {author.id}.")
 
             # Log the live channel limit change separately.
-            await self.audit_log_service.log_event(
+            await self._audit_log_service.log_event(
                 guild_id=guild.id,
                 event_type=AuditLogEventType.LIVE_CHANNEL_LIMIT_CHANGED,
                 user_id=author.id,
@@ -834,7 +517,7 @@ class VoiceCommandsCog(commands.Cog):
             return await ctx.send("Please provide a count between 1 and 50.", ephemeral=True)
 
         # Retrieve the latest audit logs from the service.
-        logs = await self.audit_log_service.get_latest_logs(guild.id, count)
+        logs = await self._audit_log_service.get_latest_logs(guild.id, count)
 
         if not logs:
             return await ctx.send("No audit log entries found for this guild.", ephemeral=True)
@@ -855,7 +538,7 @@ class VoiceCommandsCog(commands.Cog):
             # Resolve user display name/mention.
             user_display: str = "N/A"
             if user_id_val is not None:
-                fetched_user = self.bot.get_user(
+                fetched_user = self._bot.get_user(
                     user_id_val)  # Tries cached first
                 if fetched_user:
                     user_display = fetched_user.mention  # Use mention for Discord user link
@@ -867,7 +550,7 @@ class VoiceCommandsCog(commands.Cog):
             # Resolve channel display name/mention.
             channel_display: str = "N/A"
             if channel_id_val is not None:
-                fetched_channel = self.bot.get_channel(
+                fetched_channel = self._bot.get_channel(
                     channel_id_val)  # Tries cached first
                 if fetched_channel:
                     # Use mention for guild channels if available, or just name/ID.

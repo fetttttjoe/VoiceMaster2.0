@@ -1,5 +1,5 @@
 # VoiceMaster2.0/utils/db_helpers.py
-from typing import TypeVar, Optional, Union, cast
+from typing import TypeVar, Optional, Union, cast, Any
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 # Define a TypeVar for generic type hinting
@@ -41,3 +41,23 @@ def is_db_value_equal(
     # and not just the raw value at the time of static analysis. At runtime, SQLAlchemy
     # handles the comparison correctly.
     return bool(db_attribute == value_to_compare)
+
+def get_db_attribute(obj: Any, attribute_name: str) -> Optional[Any]:
+    """
+    Safely retrieves an attribute from a database model object.
+
+    This helps with static analysis by providing a clear way to access
+    attributes that might not be loaded yet, returning None if the object
+    is None or the attribute doesn't exist.
+
+    Args:
+        obj: The database model instance.
+        attribute_name: The name of the attribute to retrieve.
+
+    Returns:
+        The attribute's value, or None if the object is None or the attribute
+        is not present.
+    """
+    if obj is None:
+        return None
+    return getattr(obj, attribute_name, None)
