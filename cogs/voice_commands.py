@@ -87,12 +87,12 @@ class VoiceCommandsCog(commands.Cog):
         embed.add_field(
             name="👤 User Commands",
             value=(
-                f"`{ctx.prefix}voice lock` - Locks your channel so nobody can join.\n"
-                f"`{ctx.prefix}voice unlock` - Unlocks your channel for everyone.\n"
-                f"`{ctx.prefix}voice permit @user` - Allows a specific user to join your locked channel.\n"
+                f"`{ctx.prefix}voice lock` - Locks your current temporary channel.\n"
+                f"`{ctx.prefix}voice unlock` - Unlocks your current temporary channel.\n"
+                f"`{ctx.prefix}voice permit @user` - Permits a user to join your current locked temporary channel.\n"
                 f"`{ctx.prefix}voice claim` - Claims an empty, ownerless channel.\n"
-                f"`{ctx.prefix}voice name <new_name>` - Sets a custom name for your channel.\n"
-                f"`{ctx.prefix}voice limit <number>` - Sets a user limit for your channel (0 for none)."
+                f"`{ctx.prefix}voice name <new_name>` - Sets your default channel name.\n"
+                f"`{ctx.prefix}voice limit <number>` - Sets your default channel user limit."
             ),
             inline=False
         )
