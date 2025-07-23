@@ -82,6 +82,7 @@ class Guild(Base):
     # `uselist=False` indicates a one-to-one relationship
     settings = relationship("GuildSettings", back_populates="guild", uselist=False)
     audit_logs = relationship("AuditLogEntry", back_populates="guild")
+    voice_channels = relationship("VoiceChannel")
 
 
 
@@ -125,7 +126,7 @@ class VoiceChannel(Base):
 
     channel_id = Column(BigInteger, primary_key=True, index=True) # Discord channel ID
     owner_id = Column(BigInteger, nullable=False, index=True) # The ID of the user who "owns" this channel
-
+    guild_id = Column(BigInteger, ForeignKey("guilds.id"), nullable=False, index=True) # the guild where the channel belongs to
 
 # --- Audit Log Entry Model ---
 class AuditLogEntry(Base):

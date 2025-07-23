@@ -17,3 +17,8 @@ class IGuildService(ABC):
     @abstractmethod
     async def get_all_voice_channels(self) -> List[VoiceChannel]:
         ...
+
+    @abstractmethod
+    async def get_voice_channels_by_guild(self, guild_id:int) -> List[VoiceChannel]:
+        ...
+      

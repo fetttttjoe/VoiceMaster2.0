@@ -58,6 +58,17 @@ class GuildRepository(IGuildRepository):
         # Explicitly convert the SQLAlchemy `Sequence` result to a `list`
         # for clearer type hinting and direct list operations.
         return list(await crud.get_all_voice_channels(self._db))
+      
+    async def get_voice_channels_by_guild(self, guild_id: int) -> List[VoiceChannel]:
+      """
+      Gets all active temporary voice channels for a specific guild.
+      """
+    
+      # Explicitly convert the SQLAlchemy `Sequence` result to a `list`
+      # for clearer type hinting and direct list operations.
+     
+      return list(await crud.get_voice_channels_by_guild(self._db, guild_id))
+
 class VoiceChannelRepository(IVoiceChannelRepository):
     """
     Implements the IVoiceChannelRepository interface, providing concrete
@@ -95,7 +106,7 @@ class VoiceChannelRepository(IVoiceChannelRepository):
         """
         return await crud.get_voice_channel(self._db, channel_id)
 
-    async def create(self, channel_id: int, owner_id: int) -> None:
+    async def create(self, channel_id: int, owner_id: int, guild_id: int) -> None:
         """
         Creates a new voice channel entry.
 
@@ -103,7 +114,7 @@ class VoiceChannelRepository(IVoiceChannelRepository):
             channel_id: The ID of the new voice channel.
             owner_id: The ID of the channel's owner.
         """
-        await crud.create_voice_channel(self._db, channel_id, owner_id)
+        await crud.create_voice_channel(self._db, channel_id, owner_id, guild_id=guild_id)
 
     async def delete(self, channel_id: int) -> None:
         """

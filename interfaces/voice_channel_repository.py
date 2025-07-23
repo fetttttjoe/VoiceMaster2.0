@@ -15,7 +15,7 @@ class IVoiceChannelRepository(ABC):
         ...
 
     @abstractmethod
-    async def create(self, channel_id: int, owner_id: int) -> None:
+    async def create(self, channel_id: int, owner_id: int, guild_id: int) -> None:
         ...
 
     @abstractmethod

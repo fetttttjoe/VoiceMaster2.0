@@ -59,3 +59,14 @@ class GuildService(IGuildService):
             A list of `VoiceChannel` objects.
         """
         return await self._guild_repository.get_all_voice_channels()
+      
+             
+    async def get_voice_channels_by_guild(self, guild_id:int) -> List[VoiceChannel]:
+      """
+      Gets all active temporary voice channels for a specific guild.
+      """
+    
+      # Explicitly convert the SQLAlchemy `Sequence` result to a `list`
+      # for clearer type hinting and direct list operations.
+     
+      return  self._guild_repository.get_voice_channels_by_guild(guild_id)

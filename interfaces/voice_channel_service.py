@@ -19,7 +19,7 @@ class IVoiceChannelService(ABC):
         ...
 
     @abstractmethod
-    async def create_voice_channel(self, channel_id: int, owner_id: int) -> None:
+    async def create_voice_channel(self, channel_id: int, owner_id: int, guild_id) -> None:
         ...
 
     @abstractmethod

@@ -188,81 +188,34 @@ class VoiceCommandsCog(commands.Cog):
         """
         guild = ctx.guild
         if not guild:
-            # Redundant due to @commands.guild_only(), but good for type safety.
             return await ctx.send("This command can only be used in a server.", ephemeral=True)
 
-        logging.info(f"DEBUG: list_channels called in guild {guild.id}")
-        all_channels = await self._guild_service.get_all_voice_channels()
-        logging.info(
-            f"DEBUG: All voice channels from DB: {len(all_channels)} entries.")
+        # A single, fast, and efficient database query.
+        active_channels = await self._guild_service.get_voice_channels_by_guild(guild.id)
 
-        # Filter channels to only those belonging to the current guild
-        # Assuming VoiceChannel model has guild_id, or we need to fetch guild-specific channels.
-        # Currently, get_all_voice_channels returns all channels across all guilds.
-        # A more efficient approach would be to have a get_guild_voice_channels in crud.
-        # For now, filter after fetching.
-        guild_channels = []
-        for vc in all_channels:
-            logging.info(
-                f"DEBUG: Processing VC: {vc.channel_id} (owner: {vc.owner_id})")
-            if isinstance(vc.channel_id, int):
-                channel_obj = guild.get_channel(vc.channel_id)
-                # Check if the channel object exists and is indeed a voice channel within this guild
-                # Added channel_obj.guild check
-                logging.info(
-                    f"DEBUG: Discord channel obj for {vc.channel_id}: {channel_obj.id if channel_obj else 'None'}")
-                if channel_obj and isinstance(channel_obj, discord.VoiceChannel) and channel_obj.guild and is_db_value_equal(channel_obj.guild.id, guild.id):
-                    logging.info(
-                        f"DEBUG: Found relevant channel: {channel_obj.id} in guild {channel_obj.guild.id}")
-                    guild_channels.append(vc)
-                else:
-                    logging.info(
-                        f"DEBUG: Channel {vc.channel_id} not relevant for this guild or not a voice channel.")
-            else:
-                logging.info(
-                    f"DEBUG: vc.channel_id is not an int: {vc.channel_id}")
-
-        logging.info(
-            f"DEBUG: Filtered guild_channels count: {len(guild_channels)}")
-        if not guild_channels:
-            logging.info(
-                f"DEBUG: No active temporary channels found for guild {guild.id}. Sending ephemeral message.")
+        if not active_channels:
             await ctx.send("There are no active temporary channels managed by VoiceMaster in this guild.", ephemeral=True)
-            # Audit log is handled by the decorator for this case as well.
             return
 
         embed = discord.Embed(
             title="Active Temporary Channels", color=discord.Color.green())
-        # Use a list to build description efficiently
         description_lines: list[str] = []
 
-        for vc in guild_channels:
-            # Ensure IDs are integers for API calls and type safety.
-            assert isinstance(vc.channel_id, int) and isinstance(
-                vc.owner_id, int)
-
-            # Fetch Discord channel and owner member objects.
+        # The rest of the logic to build the embed remains the same...
+        for vc in active_channels:
             channel = guild.get_channel(vc.channel_id)
-            # get_member is a cached lookup, fetch_member for non-cached
             owner = guild.get_member(vc.owner_id)
 
             if channel and owner:
-                # If both channel and owner are found on Discord.
                 description_lines.append(
                     f"**{channel.name}** (<#{channel.id}>) - Owned by {owner.mention}")
             elif channel:
-                # If channel found but owner not (e.g., owner left guild).
                 description_lines.append(
                     f"**{channel.name}** (<#{channel.id}>) - Owner not found (ID: {vc.owner_id})")
-            # If channel is None, it implies a stale entry, which should ideally be cleaned up by events.
-            # We don't add stale entries to the list here.
 
-        embed.description = "\n".join(
-            description_lines) if description_lines else "No active temporary channels found."
+        embed.description = "\n".join(description_lines) if description_lines else "No active temporary channels found."
         await ctx.send(embed=embed)
-        logging.info(
-            f"DEBUG: Sent embed for active channels. Embed description length: {len(embed.description)}")
-        # Audit log is handled by the decorator.
+
 
     @voice.command(name="lock")
     @commands.guild_only()
@@ -368,7 +321,6 @@ class VoiceCommandsCog(commands.Cog):
         # We also need `vc.owner_id` for logging, which is handled by audit_log decorator.
         # Type guard for the original owner ID
         assert isinstance(vc.owner_id, int)
-        old_owner_id = vc.owner_id  # Capture for audit log details
         # Attempt to fetch the Discord member object for the owner
         owner = guild.get_member(vc.owner_id)
 

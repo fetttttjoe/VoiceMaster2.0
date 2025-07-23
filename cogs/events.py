@@ -366,7 +366,7 @@ class EventsCog(commands.Cog):
             logging.info(f"DEBUG: Discord channel created: {new_channel.id}")
 
             # Store the new channel's information in the database.
-            await self._voice_channel_service.create_voice_channel(new_channel.id, member.id)
+            await self._voice_channel_service.create_voice_channel(new_channel.id, member.id, member.guild.id)
             logging.info(
                 f"DEBUG: Database entry created for channel {new_channel.id}")
 
