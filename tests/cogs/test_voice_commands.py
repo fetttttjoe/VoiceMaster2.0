@@ -427,7 +427,6 @@ async def test_edit_command_no_subcommand(mock_bot, mock_ctx):
     callback = cast(Callable[..., Any], edit_command.callback)
     await callback(cog, mock_ctx)
     mock_ctx.send.assert_called_with("Please specify what you want to edit. Use `.voice edit rename` or `.voice edit select`.")
-
 @pytest.mark.asyncio
 @patch('database.database.db.get_session')
 async def test_list_command(mock_get_session, mock_bot, mock_ctx):
@@ -445,14 +444,14 @@ async def test_list_command(mock_get_session, mock_bot, mock_ctx):
     mock_bot.audit_log_service = mock_audit_log_service
 
     # Set return value on the *injected* mock_guild_service_instance
-    mock_guild_service_instance.get_all_voice_channels.return_value = [
+    mock_guild_service_instance.get_voice_channels_by_guild.return_value = [
         MagicMock(channel_id=1, owner_id=10),
         MagicMock(channel_id=2, owner_id=20)
     ]
     # Mock bot.get_channel and bot.get_user for the list command's internal logic
     mock_ctx.guild.get_channel.return_value = AsyncMock(spec=discord.VoiceChannel, name="Channel1", mention="<#1>", guild=mock_ctx.guild)
+    # Make get_user return different users for each call
     mock_bot.get_user.side_effect = [AsyncMock(spec=discord.User, mention="<@10>"), AsyncMock(spec=discord.User, mention="<@20>")]
-
 
     cog = VoiceCommandsCog(mock_bot, mock_guild_service_instance, mock_voice_channel_service, mock_audit_log_service)
     
@@ -464,6 +463,8 @@ async def test_list_command(mock_get_session, mock_bot, mock_ctx):
     callback = cast(Callable[..., Any], list_command.callback)
     await callback(cog, mock_ctx)
 
+    mock_guild_service_instance.get_voice_channels_by_guild.assert_called_once_with(mock_ctx.guild.id)
+    
     mock_ctx.send.assert_called_once()
     assert 'embed' in mock_ctx.send.call_args.kwargs
     # Assert on the *injected* mock_audit_log_service

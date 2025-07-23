@@ -64,7 +64,7 @@ class VoiceChannelService(IVoiceChannelService):
         """
         await self._vc_repository.delete(channel_id)
 
-    async def create_voice_channel(self, channel_id: int, owner_id: int) -> None:
+    async def create_voice_channel(self, channel_id: int, owner_id: int, guild_id: int) -> None:
         """
         Creates a new temporary voice channel entry in the database.
 
@@ -75,7 +75,7 @@ class VoiceChannelService(IVoiceChannelService):
             channel_id: The Discord ID of the newly created channel.
             owner_id: The ID of the user who owns this new channel.
         """
-        await self._vc_repository.create(channel_id, owner_id)
+        await self._vc_repository.create(channel_id, owner_id, guild_id)
 
     async def update_voice_channel_owner(self, channel_id: int, new_owner_id: int) -> None:
         """

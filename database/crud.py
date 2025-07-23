@@ -101,7 +101,16 @@ async def get_all_voice_channels(db: AsyncSession):
     result = await db.execute(select(models.VoiceChannel))
     return result.scalars().all()
 
-async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int):
+async def get_voice_channels_by_guild(db: AsyncSession, guild_id: int):
+    """
+    Gets all active temporary voice channels for a specific guild.
+    """
+    result = await db.execute(
+        select(models.VoiceChannel).where(models.VoiceChannel.guild_id == guild_id)
+    )
+    return result.scalars().all()
+
+async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int, guild_id):
     """
     Creates a new VoiceChannel entry in the database.
 
@@ -110,7 +119,7 @@ async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int)
         channel_id: The ID of the newly created voice channel.
         owner_id: The ID of the user who owns this channel.
     """
-    db.add(models.VoiceChannel(channel_id=channel_id, owner_id=owner_id))
+    db.add(models.VoiceChannel(channel_id=channel_id, owner_id=owner_id, guild_id=guild_id))
     await db.commit() # Commit the new entry
 
 async def delete_voice_channel(db: AsyncSession, channel_id: int):
