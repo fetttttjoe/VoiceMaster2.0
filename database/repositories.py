@@ -69,6 +69,8 @@ class GuildRepository(IGuildRepository):
      
       return list(await crud.get_voice_channels_by_guild(self._db, guild_id))
 
+    async def update_cleanup_flag(self, guild_id: int, enabled: bool) -> None:
+        await crud.update_guild_cleanup_flag(self._db, guild_id, enabled)
 class VoiceChannelRepository(IVoiceChannelRepository):
     """
     Implements the IVoiceChannelRepository interface, providing concrete
