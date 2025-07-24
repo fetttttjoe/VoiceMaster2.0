@@ -17,8 +17,15 @@ class IGuildService(ABC):
     @abstractmethod
     async def get_all_voice_channels(self) -> List[VoiceChannel]:
         ...
+    
+    @abstractmethod
+    async def get_voice_channels_by_guild(self, guild_id: int) -> List[VoiceChannel]:
+        ...
 
     @abstractmethod
-    async def get_voice_channels_by_guild(self, guild_id:int) -> List[VoiceChannel]:
+    async def cleanup_guild_channels(self, guild_id: int) -> None:
         ...
-      
+        
+    @abstractmethod
+    async def set_cleanup_on_startup(self, guild_id: int, enabled: bool) -> None:
+        ...

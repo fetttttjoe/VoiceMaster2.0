@@ -109,6 +109,18 @@ async def get_voice_channels_by_guild(db: AsyncSession, guild_id: int):
         select(models.VoiceChannel).where(models.VoiceChannel.guild_id == guild_id)
     )
     return result.scalars().all()
+  
+async def update_guild_cleanup_flag(db: AsyncSession, guild_id: int, enabled: bool):
+    """
+    Updates the cleanup_on_startup flag for a specific guild.
+    """
+    stmt = (
+        update(models.Guild)
+        .where(models.Guild.id == guild_id)
+        .values(cleanup_on_startup=enabled)
+    )
+    await db.execute(stmt)
+    await db.commit()
 
 async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int, guild_id):
     """

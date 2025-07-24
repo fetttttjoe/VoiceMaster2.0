@@ -19,6 +19,9 @@ class IGuildRepository(ABC):
         ...
 
     @abstractmethod
-    async def get_voice_channels_by_guild(self, guild_id:int) -> List[VoiceChannel]:
+    async def get_voice_channels_by_guild(self, guild_id: int) -> List[VoiceChannel]:
         ...
-      
+    
+    @abstractmethod
+    async def update_cleanup_flag(self, guild_id: int, enabled: bool) -> None:
+        ...

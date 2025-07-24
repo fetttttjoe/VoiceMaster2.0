@@ -15,7 +15,7 @@ from utils.checks import is_in_voice_channel, is_channel_owner  # Custom command
 # Helper for safe database value comparison
 from utils.db_helpers import is_db_value_equal
 # Import the new views
-from views.voice_commands_views import RenameView, SelectView
+from views.voice_commands_views import RenameView, SelectView, ConfigView
 from views.setup_view import SetupView
 
 # Abstractions for dependency injection
@@ -80,7 +80,8 @@ class VoiceCommandsCog(commands.Cog):
                 f"`{ctx.prefix}voice edit rename` - Rename the creation channel or category.\n"
                 f"`{ctx.prefix}voice edit select` - Select a different creation channel or category.\n"
                 f"`{ctx.prefix}voice list` - Lists all active temporary channels.\n"
-                f"`{ctx.prefix}voice auditlog [count]` - Shows recent bot activity."
+                f"`{ctx.prefix}voice auditlog [count]` - Shows recent bot activity.\n"
+                f"`{ctx.prefix}voice config` - Opens an interactive menu for bot settings."
             ),
             inline=False
         )
@@ -97,6 +98,37 @@ class VoiceCommandsCog(commands.Cog):
             inline=False
         )
         await ctx.send(embed=embed)
+
+    @voice.command(name="config")
+    @commands.has_guild_permissions(administrator=True)
+    @commands.guild_only()
+    async def config(self, ctx: Context):
+        if not ctx.guild:
+            return
+
+        guild_config = await self._guild_service.get_guild_config(ctx.guild.id)
+        if not guild_config:
+            await ctx.send(f"The bot has not been set up yet. Run `{ctx.prefix}voice setup` first.", ephemeral=True)
+            return
+        
+        cleanup_status = "Enabled" if guild_config.cleanup_on_startup else "Disabled"
+        status_icon = "✅" if guild_config.cleanup_on_startup else "❌"
+        
+        embed = discord.Embed(
+            title=f"VoiceMaster Config for {ctx.guild.name}",
+            description="Use the buttons below to manage bot settings for this server.",
+            color=discord.Color.orange()
+        )
+        embed.add_field(
+            name="Automatic Channel Cleanup on Startup",
+            value=f"{status_icon} Status: **{cleanup_status}**\nThis feature automatically deletes empty temporary channels when the bot starts.",
+            inline=False
+        )
+        
+        view = ConfigView(ctx, guild_config)
+        # The message is now public, but interactions are handled privately by the view.
+        message = await ctx.send(embed=embed, view=view) # REMOVED ephemeral=True
+        view.message = message
 
     @voice.command(name="setup")
     @commands.has_guild_permissions(administrator=True)
@@ -348,6 +380,10 @@ class VoiceCommandsCog(commands.Cog):
         Args:
             new_name: The desired new name for the channel.
         """
+        
+        if not (2 <= len(new_name) <= 100):
+            return await ctx.send("Please provide a name between 2 and 100 characters.", ephemeral=True)
+        
         author = cast(discord.Member, ctx.author)
         guild = cast(discord.Guild, ctx.guild)
 

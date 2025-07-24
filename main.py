@@ -37,10 +37,9 @@ class VoiceMasterBot(commands.Bot):
         # 1. Initialize the database connection.
         await db.init_db()
 
-        # 2. Create a single session for the container to build services.
-        #    This session's lifecycle is managed by the bot's run context.
+        # 2. Create a session and the bot instance (self) to the container.
         session = await db.get_session().__aenter__()
-        container = Container(session)
+        container = Container(session, self)
 
         # 3. Attach the fully initialized services to the bot instance.
         self.guild_service = container.guild_service
@@ -62,8 +61,6 @@ async def main():
 
     # --- Intents Setup ---
     intents = discord.Intents.default()
-    # These attributes are correct for discord.py v2+. Pylance may show a warning
-    # if its stubs are outdated, but the code is functionally correct.
     intents.message_content = True
     intents.voice_states = True
     intents.guilds = True
@@ -79,6 +76,9 @@ async def main():
             logging.info('------')
         else:
             logging.error("Bot user is not available on ready.")
+
+        for guild in bot.guilds:
+            await bot.guild_service.cleanup_guild_channels(guild.id)
 
     await bot.start(config.DISCORD_TOKEN)
 

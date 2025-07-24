@@ -2,6 +2,7 @@
 from sqlalchemy import (
     Column,
     BigInteger,
+    Boolean,
     String,
     Integer,
     ForeignKey,
@@ -57,6 +58,8 @@ class AuditLogEventType(Enum):
     USER_MOVED_TO_EXISTING_CHANNEL = "USER_MOVED_TO_EXISTING_CHANNEL"
     STALE_CHANNEL_CLEANUP = "STALE_CHANNEL_CLEANUP" # DB entry exists but Discord channel doesn't
 
+    CLEANUP_STATE_CHANGED = "CLEANUP_STATE_CHANGED"
+
     # Error/Configuration Specific Events
     CONFIG_ERROR = "CONFIG_ERROR"
     CATEGORY_NOT_FOUND = "CATEGORY_NOT_FOUND"
@@ -77,7 +80,7 @@ class Guild(Base):
     owner_id = Column(BigInteger, nullable=False) # The ID of the guild's owner (Discord user ID)
     voice_category_id = Column(BigInteger, nullable=True) # The ID of the category where temp voice channels are created
     creation_channel_id = Column(BigInteger, nullable=True) # The ID of the voice channel users join to create new channels
-
+    cleanup_on_startup = Column(Boolean, default=True, nullable=False)
     # One-to-one relationship with GuildSettings, allowing access to default settings
     # `uselist=False` indicates a one-to-one relationship
     settings = relationship("GuildSettings", back_populates="guild", uselist=False)

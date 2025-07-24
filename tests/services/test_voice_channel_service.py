@@ -1,27 +1,28 @@
 import pytest
 from unittest.mock import patch, AsyncMock
 
-from services.voice_channel_service import VoiceChannelService
-from interfaces.voice_channel_repository import IVoiceChannelRepository
-from interfaces.user_settings_repository import IUserSettingsRepository
+from services.guild_service import GuildService
+from interfaces.guild_repository import IGuildRepository
 
 
 @pytest.mark.asyncio
-async def test_get_voice_channel_by_owner(mock_voice_channel_repository, mock_user_settings_repository):
+async def test_get_guild_config(mock_guild_repository, mock_voice_channel_service, mock_bot):
     """
-    Tests that get_voice_channel_by_owner calls get_by_owner on its repository.
+    Tests that get_guild_config calls get_guild on its repository.
     """
-    vc_service = VoiceChannelService(mock_voice_channel_repository, mock_user_settings_repository)
-    
-    await vc_service.get_voice_channel_by_owner(123)
-    mock_voice_channel_repository.get_by_owner.assert_called_once_with(123)
-
+    # Instantiate the service with all required mocked dependencies.
+    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
+    await guild_service.get_guild_config(123)
+    # Assert that the method on the MOCKED REPOSITORY was called
+    mock_guild_repository.get_guild.assert_called_once_with(123)
 
 @pytest.mark.asyncio
-async def test_delete_voice_channel(mock_voice_channel_repository, mock_user_settings_repository):
+async def test_create_or_update_guild(mock_guild_repository, mock_voice_channel_service, mock_bot):
     """
-    Tests that delete_voice_channel calls delete on its repository.
+    Tests that create_or_update_guild calls create_or_update_guild on its repository.
     """
-    vc_service = VoiceChannelService(mock_voice_channel_repository, mock_user_settings_repository)
-    await vc_service.delete_voice_channel(456)
-    mock_voice_channel_repository.delete.assert_called_once_with(456)
+    # Instantiate the service with all required mocked dependencies.
+    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
+    await guild_service.create_or_update_guild(1, 2, 3, 4)
+    # Assert that the method on the MOCKED REPOSITORY was called
+    mock_guild_repository.create_or_update_guild.assert_called_once_with(1, 2, 3, 4)

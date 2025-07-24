@@ -9,24 +9,26 @@ from typing import cast, Literal, Optional
 from main import VoiceMasterBot
 from interfaces.guild_service import IGuildService
 from interfaces.audit_log_service import IAuditLogService
-from database.models import AuditLogEventType
+from database.models import AuditLogEventType, Guild
 from discord.interactions import Interaction
 
 class AuthorOnlyView(ui.View):
     """
     A base View that only allows the original command author to interact.
+    Includes robust error handling and automatic component disabling on timeout.
     """
     def __init__(self, ctx: Context, **kwargs):
         super().__init__(**kwargs)
         self.ctx = ctx
         self.bot: VoiceMasterBot = cast(VoiceMasterBot, ctx.bot)
+        self.message: Optional[discord.Message] = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """
         Ensures that the interacting user is the original author of the command.
         """
         if interaction.user.id != self.ctx.author.id:
-            await interaction.response.send_message("You are not the owner of this interactive component.", ephemeral=True)
+            await interaction.response.send_message("You are not authorized to interact with this component.", ephemeral=True)
             return False
         return True
 
@@ -34,8 +36,8 @@ class AuthorOnlyView(ui.View):
         """
         Global error handler for the view. Logs unexpected errors.
         """
-        logging.error(f"An error occurred in a view: {error}", exc_info=True)
-        message = "An unexpected error occurred. This has been logged."
+        logging.error(f"An error occurred in view '{type(self).__name__}' (Item: {item}): {error}", exc_info=True)
+        message = "An unexpected error occurred. This has been logged for review."
         if interaction.response.is_done():
             await interaction.followup.send(message, ephemeral=True)
         else:
@@ -98,7 +100,6 @@ class RenameView(AuthorOnlyView):
     @ui.button(label="Rename Category", style=discord.ButtonStyle.primary, emoji="✏️")
     async def rename_category_button(self, interaction: discord.Interaction, button: ui.Button):
         await self._perform_rename(interaction, 'category')
-
 
 class SelectView(AuthorOnlyView):
     """
@@ -177,3 +178,64 @@ class SelectView(AuthorOnlyView):
 
     async def category_select_callback(self, interaction: Interaction):
         await self._update_selection(interaction, 'category')
+
+
+class ConfigView(AuthorOnlyView):
+    """
+    An interactive, persistent view for managing guild-specific bot configurations.
+    """
+    def __init__(self, ctx: Context, guild_config: Guild):
+        # Setting timeout=None makes the view persistent until the bot restarts.
+        super().__init__(ctx, timeout=None)
+        self.guild_service: IGuildService = self.bot.guild_service
+        self.audit_log_service: IAuditLogService = self.bot.audit_log_service
+        self.guild_config = guild_config
+        self._update_button_states()
+
+    def _update_button_states(self):
+        enable_button = next((child for child in self.children if isinstance(child, ui.Button) and child.custom_id == "enable_cleanup"), None)
+        disable_button = next((child for child in self.children if isinstance(child, ui.Button) and child.custom_id == "disable_cleanup"), None)
+
+        if enable_button:
+            enable_button.disabled = self.guild_config.cleanup_on_startup
+        if disable_button:
+            disable_button.disabled = not self.guild_config.cleanup_on_startup
+
+    async def _update_config(self, interaction: discord.Interaction, new_state: bool):
+        await self.guild_service.set_cleanup_on_startup(self.ctx.guild.id, new_state)
+        self.guild_config.cleanup_on_startup = new_state
+        self._update_button_states()
+        
+        status_message = "Enabled" if new_state else "Disabled"
+        status_icon = "✅" if new_state else "❌"
+        
+        embed = discord.Embed(
+            title=f"VoiceMaster Config for {self.ctx.guild.name}",
+            description="Use the buttons below to manage bot settings for this server.",
+            color=discord.Color.orange()
+        )
+        embed.add_field(
+            name="Automatic Channel Cleanup on Startup",
+            value=f"{status_icon} Status: **{status_message}**\nThis feature automatically deletes empty temporary channels when the bot starts.",
+            inline=False
+        )
+        
+        await interaction.response.edit_message(embed=embed, view=self)
+
+        # Log the consolidated action to the audit log
+        details = f"User {interaction.user.display_name} ({interaction.user.id}) changed automatic cleanup to '{status_message}'."
+        await self.audit_log_service.log_event(
+            guild_id=self.ctx.guild.id,
+            event_type=AuditLogEventType.CLEANUP_STATE_CHANGED,
+            user_id=interaction.user.id,
+            details=details
+        )
+
+    @ui.button(label="Enable Cleanup", style=discord.ButtonStyle.success, custom_id="enable_cleanup")
+    async def enable_button(self, interaction: discord.Interaction, button: ui.Button):
+        await self._update_config(interaction, True)
+
+    @ui.button(label="Disable Cleanup", style=discord.ButtonStyle.danger, custom_id="disable_cleanup")
+    async def disable_button(self, interaction: discord.Interaction, button: ui.Button):
+        await self._update_config(interaction, False)
+        
