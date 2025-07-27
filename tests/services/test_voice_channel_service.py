@@ -1,28 +1,65 @@
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
-from services.guild_service import GuildService
-from interfaces.guild_repository import IGuildRepository
-
-
-@pytest.mark.asyncio
-async def test_get_guild_config(mock_guild_repository, mock_voice_channel_service, mock_bot):
-    """
-    Tests that get_guild_config calls get_guild on its repository.
-    """
-    # Instantiate the service with all required mocked dependencies.
-    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
-    await guild_service.get_guild_config(123)
-    # Assert that the method on the MOCKED REPOSITORY was called
-    mock_guild_repository.get_guild.assert_called_once_with(123)
+from services.voice_channel_service import VoiceChannelService
+from database.models import VoiceChannel, UserSettings
+from database import crud
 
 @pytest.mark.asyncio
-async def test_create_or_update_guild(mock_guild_repository, mock_voice_channel_service, mock_bot):
-    """
-    Tests that create_or_update_guild calls create_or_update_guild on its repository.
-    """
-    # Instantiate the service with all required mocked dependencies.
-    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
-    await guild_service.create_or_update_guild(1, 2, 3, 4)
-    # Assert that the method on the MOCKED REPOSITORY was called
-    mock_guild_repository.create_or_update_guild.assert_called_once_with(1, 2, 3, 4)
+async def test_get_voice_channel_by_owner(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.get_voice_channel_by_owner = AsyncMock(return_value=MagicMock(spec=VoiceChannel))
+    result = await voice_channel_service.get_voice_channel_by_owner(123)
+    crud.get_voice_channel_by_owner.assert_called_once_with(mock_db_session, 123)
+    assert result is not None
+
+@pytest.mark.asyncio
+async def test_get_voice_channel(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.get_voice_channel = AsyncMock(return_value=MagicMock(spec=VoiceChannel))
+    result = await voice_channel_service.get_voice_channel(456)
+    crud.get_voice_channel.assert_called_once_with(mock_db_session, 456)
+    assert result is not None
+
+@pytest.mark.asyncio
+async def test_delete_voice_channel(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.delete_voice_channel = AsyncMock()
+    await voice_channel_service.delete_voice_channel(789)
+    crud.delete_voice_channel.assert_called_once_with(mock_db_session, 789)
+
+@pytest.mark.asyncio
+async def test_create_voice_channel(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.create_voice_channel = AsyncMock()
+    await voice_channel_service.create_voice_channel(111, 222, 333)
+    crud.create_voice_channel.assert_called_once_with(mock_db_session, 111, 222, 333)
+
+@pytest.mark.asyncio
+async def test_update_voice_channel_owner(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.update_voice_channel_owner = AsyncMock()
+    await voice_channel_service.update_voice_channel_owner(444, 555)
+    crud.update_voice_channel_owner.assert_called_once_with(mock_db_session, 444, 555)
+
+@pytest.mark.asyncio
+async def test_get_user_settings(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.get_user_settings = AsyncMock(return_value=MagicMock(spec=UserSettings))
+    result = await voice_channel_service.get_user_settings(666)
+    crud.get_user_settings.assert_called_once_with(mock_db_session, 666)
+    assert result is not None
+
+@pytest.mark.asyncio
+async def test_update_user_channel_name(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.update_user_channel_name = AsyncMock()
+    await voice_channel_service.update_user_channel_name(777, "New Name")
+    crud.update_user_channel_name.assert_called_once_with(mock_db_session, 777, "New Name")
+
+@pytest.mark.asyncio
+async def test_update_user_channel_limit(mock_db_session):
+    voice_channel_service = VoiceChannelService(mock_db_session)
+    crud.update_user_channel_limit = AsyncMock()
+    await voice_channel_service.update_user_channel_limit(888, 10)
+    crud.update_user_channel_limit.assert_called_once_with(mock_db_session, 888, 10)

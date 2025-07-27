@@ -12,10 +12,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
 from interfaces.audit_log_service import IAuditLogService
-from interfaces.guild_repository import IGuildRepository
-from interfaces.voice_channel_repository import IVoiceChannelRepository
-from interfaces.user_settings_repository import IUserSettingsRepository
-from interfaces.audit_log_repository import IAuditLogRepository
+from services.audit_log_service import AuditLogService
+
 
 @pytest.fixture
 def mock_guild_service():
@@ -30,7 +28,7 @@ def mock_voice_channel_service():
 @pytest.fixture
 def mock_audit_log_service():
     """Fixture for a mocked AuditLogService instance."""
-    return AsyncMock(spec=IAuditLogService)
+    return AsyncMock(spec=AuditLogService)
 
 @pytest.fixture
 def mock_bot(mock_guild_service, mock_voice_channel_service, mock_audit_log_service):
@@ -81,20 +79,6 @@ def mock_db_session():
     """Fixture for a mocked database session."""
     return AsyncMock()
 
-# --- Repository Fixtures for Service Tests ---
 
-@pytest.fixture
-def mock_guild_repository():
-    return AsyncMock(spec=IGuildRepository)
 
-@pytest.fixture
-def mock_voice_channel_repository():
-    return AsyncMock(spec=IVoiceChannelRepository)
 
-@pytest.fixture
-def mock_user_settings_repository():
-    return AsyncMock(spec=IUserSettingsRepository)
-
-@pytest.fixture
-def mock_audit_log_repository():
-    return AsyncMock(spec=IAuditLogRepository)

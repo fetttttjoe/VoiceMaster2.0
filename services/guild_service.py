@@ -3,9 +3,10 @@ from typing import Optional, List, TYPE_CHECKING
 import discord
 
 from interfaces.guild_service import IGuildService
-from interfaces.guild_repository import IGuildRepository
 from interfaces.voice_channel_service import IVoiceChannelService
 from database.models import Guild, VoiceChannel
+from sqlalchemy.ext.asyncio import AsyncSession
+from database import crud
 
 if TYPE_CHECKING:
     from main import VoiceMasterBot
@@ -16,16 +17,16 @@ class GuildService(IGuildService):
     """
     def __init__(
         self,
-        guild_repository: IGuildRepository,
+        session: AsyncSession,
         voice_channel_service: IVoiceChannelService,
         bot: 'VoiceMasterBot'
     ):
-        self._guild_repository = guild_repository
+        self._session = session
         self._voice_channel_service = voice_channel_service
         self._bot = bot
 
     async def get_guild_config(self, guild_id: int) -> Optional[Guild]:
-        return await self._guild_repository.get_guild(guild_id)
+        return await crud.get_guild(self._session, guild_id)
 
     async def create_or_update_guild(self, guild_id: int, owner_id: int, category_id: int, channel_id: int) -> None:
         """
@@ -40,7 +41,7 @@ class GuildService(IGuildService):
             category_id: The ID of the voice category designated for temporary channels.
             channel_id: The ID of the "join to create" voice channel.
         """
-        await self._guild_repository.create_or_update_guild(guild_id, owner_id, category_id, channel_id)
+        await crud.create_or_update_guild(self._session, guild_id, owner_id, category_id, channel_id)
 
     async def get_all_voice_channels(self) -> List[VoiceChannel]:
         """
@@ -52,16 +53,16 @@ class GuildService(IGuildService):
         Returns:
             A list of `VoiceChannel` objects.
         """
-        return await self._guild_repository.get_all_voice_channels()
+        return await crud.get_all_voice_channels(self._session)
 
     async def get_voice_channels_by_guild(self, guild_id: int) -> List[VoiceChannel]:
-        return await self._guild_repository.get_voice_channels_by_guild(guild_id)
+        return await crud.get_voice_channels_by_guild(self._session, guild_id)
 
     async def set_cleanup_on_startup(self, guild_id: int, enabled: bool) -> None:
         """
         Sets the 'cleanup_on_startup' flag for a guild.
         """
-        await self._guild_repository.update_cleanup_flag(guild_id, enabled)
+        await crud.update_guild_cleanup_flag(self._session, guild_id, enabled)
 
     async def cleanup_guild_channels(self, guild_id: int) -> None:
         """

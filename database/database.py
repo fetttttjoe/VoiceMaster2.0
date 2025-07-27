@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 import logging # Import logging for explicit error logging
 
 from .models import Base
-from config import DATABASE_URL # Ensure DATABASE_URL is correctly imported from config
+from config import DATABASE_URL, DB_ECHO # Ensure DATABASE_URL and DB_ECHO are correctly imported from config
 
 class Database:
     """
@@ -22,7 +22,7 @@ class Database:
         # Create an asynchronous SQLAlchemy engine.
         # `echo=False` means SQL statements won't be printed to console by default,
         # which is suitable for production but can be set to `True` for debugging.
-        self.engine = create_async_engine(db_url, echo=False)
+        self.engine = create_async_engine(db_url, echo=DB_ECHO)
         
         # Create a sessionmaker for asynchronous sessions.
         # `expire_on_commit=False` ensures that objects remain accessible after commit
