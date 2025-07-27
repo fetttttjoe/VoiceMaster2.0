@@ -1,7 +1,8 @@
 # tests/cogs/test_events_extended.py
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
 import discord
+import pytest
 
 from cogs.events import EventsCog
 from database.models import AuditLogEventType
@@ -14,23 +15,18 @@ async def test_handle_channel_leave_stale_channel_cleanup(mock_bot):
     deleted from Discord when the bot tries to delete it.
     """
     # Arrange
-    cog = EventsCog(
-        mock_bot, 
-        mock_bot.guild_service, 
-        mock_bot.voice_channel_service, 
-        mock_bot.audit_log_service
-    )
-    
+    cog = EventsCog(mock_bot, mock_bot.guild_service, mock_bot.voice_channel_service, mock_bot.audit_log_service)
+
     member = AsyncMock(spec=discord.Member, id=1, guild=MagicMock(id=123))
-    
+
     # Simulate a channel that is empty
     before_channel = AsyncMock(spec=discord.VoiceChannel, id=789, name="Old Channel", members=[])
     before_channel.name = "Old Channel"
     before_state = AsyncMock(spec=discord.VoiceState, channel=before_channel)
-    
+
     # The channel exists in our database
     mock_bot.voice_channel_service.get_voice_channel.return_value = MagicMock(channel_id=789, owner_id=member.id)
-    
+
     # Simulate that the channel is NOT FOUND when we try to delete it on Discord
     before_channel.delete.side_effect = discord.NotFound(response=MagicMock(), message="Channel not found")
 
@@ -44,8 +40,9 @@ async def test_handle_channel_leave_stale_channel_cleanup(mock_bot):
         guild_id=member.guild.id,
         event_type=AuditLogEventType.CHANNEL_DELETED_NOT_FOUND,
         channel_id=789,
-        details=f"Temporary channel {before_channel.id} was already gone from Discord but its entry was removed from the database."
+        details=f"Temporary channel {before_channel.id} was already gone from Discord but its entry was removed from the database.",
     )
+
 
 @pytest.mark.asyncio
 async def test_handle_channel_creation_no_config(mock_bot):
@@ -54,17 +51,12 @@ async def test_handle_channel_creation_no_config(mock_bot):
     for the guild.
     """
     # Arrange
-    cog = EventsCog(
-        mock_bot, 
-        mock_bot.guild_service, 
-        mock_bot.voice_channel_service, 
-        mock_bot.audit_log_service
-    )
-    
+    cog = EventsCog(mock_bot, mock_bot.guild_service, mock_bot.voice_channel_service, mock_bot.audit_log_service)
+
     member = AsyncMock(spec=discord.Member, bot=False, guild=MagicMock(id=123))
     before_state = AsyncMock(spec=discord.VoiceState, channel=None)
     after_state = AsyncMock(spec=discord.VoiceState, channel=AsyncMock(id=456))
-    
+
     # Simulate that the guild has no configuration
     mock_bot.guild_service.get_guild_config.return_value = None
 

@@ -1,6 +1,7 @@
 # VoiceMaster2.0/utils/formatters.py
 import re
-from typing import Any 
+from typing import Any
+
 
 def format_template(template: str, **kwargs: Any) -> str:
     """
@@ -38,11 +39,11 @@ def format_template(template: str, **kwargs: Any) -> str:
             The value of the nested attribute, or `None` if any part of the path is missing.
         """
         current_obj = obj
-        for attr in attr_string.split('.'):
+        for attr in attr_string.split("."):
             # Use getattr with a default of None to prevent AttributeError
             current_obj = getattr(current_obj, attr, None)
             if current_obj is None:
-                return None # Return None if any attribute in the chain is not found
+                return None  # Return None if any attribute in the chain is not found
         return current_obj
 
     # Find all placeholders enclosed in curly braces, e.g., {ctx.author.name}
@@ -51,13 +52,13 @@ def format_template(template: str, **kwargs: Any) -> str:
     for placeholder in placeholders:
         # Split the placeholder into the initial object name and its subsequent attributes
         # Example: "ctx.author.name" -> ["ctx", "author.name"]
-        parts = placeholder.split('.', 1)
+        parts = placeholder.split(".", 1)
         obj_name = parts[0]
-        
+
         # Check if the initial object name exists in the provided keyword arguments
         if obj_name in kwargs:
             obj = kwargs[obj_name]
-            
+
             # If there are nested attributes to access (e.g., 'author.name')
             if len(parts) > 1:
                 attr_string = parts[1]
@@ -65,7 +66,7 @@ def format_template(template: str, **kwargs: Any) -> str:
             else:
                 # The placeholder refers directly to the object itself (e.g., "{member}")
                 value = obj
-            
+
             # If a valid value was retrieved (not None after traversal)
             if value is not None:
                 # Replace the original placeholder with the string representation of the value
@@ -74,7 +75,7 @@ def format_template(template: str, **kwargs: Any) -> str:
                 # If the value could not be resolved (e.g., attribute missing),
                 # leave the placeholder as is (or replace with a default like 'N/A' if preferred).
                 # For this implementation, the original placeholder is kept.
-                pass # No replacement if value is None
+                pass  # No replacement if value is None
         # If the top-level object (obj_name) is not in kwargs, the placeholder remains unchanged.
 
     return template

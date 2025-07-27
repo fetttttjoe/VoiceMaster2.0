@@ -1,21 +1,21 @@
 import asyncio
 import logging
+
 import discord
 from discord.ext import commands
+
 import config
-from database.database import db
 from container import Container
+from database.database import db
+from interfaces.audit_log_service import IAuditLogService
 
 # Abstractions (for type hinting the bot class)
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
-from interfaces.audit_log_service import IAuditLogService
 
 # --- Logging Setup ---
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+
 
 # --- Custom Bot Class ---
 # By creating a custom Bot class, we can properly type-hint our services.
@@ -47,10 +47,11 @@ class VoiceMasterBot(commands.Bot):
         self.audit_log_service = container.audit_log_service
 
         # 4. Load all cogs. They can now safely access the services.
-        await self.load_extension('cogs.events')
-        await self.load_extension('cogs.voice_commands')
-        await self.load_extension('cogs.errors')
+        await self.load_extension("cogs.events")
+        await self.load_extension("cogs.voice_commands")
+        await self.load_extension("cogs.errors")
         logging.info("All cogs loaded successfully.")
+
 
 # --- Main Asynchronous Function ---
 async def main():
@@ -72,15 +73,13 @@ async def main():
     async def on_ready():
         """Event triggered when the bot is ready."""
         if bot.user:
-            logging.info(f'Logged in as {bot.user.name} ({bot.user.id})')
-            logging.info('------')
+            logging.info(f"Logged in as {bot.user.name} ({bot.user.id})")
+            logging.info("------")
         else:
             logging.error("Bot user is not available on ready.")
 
-        for guild in bot.guilds:
-            await bot.guild_service.cleanup_guild_channels(guild.id)
-
     await bot.start(config.DISCORD_TOKEN)
+
 
 # --- Application Entry Point ---
 if __name__ == "__main__":

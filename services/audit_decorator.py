@@ -1,12 +1,14 @@
 import inspect
-import discord
 from functools import wraps
-from typing import Callable, Any, cast
+from typing import Any, Callable, cast
 
+import discord
 from discord.ext.commands import Context
+
 from database.models import AuditLogEventType
+from main import VoiceMasterBot  # Import the custom bot class for type hinting
 from utils.formatters import format_template
-from main import VoiceMasterBot # Import the custom bot class for type hinting
+
 
 def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
     """
@@ -26,6 +28,7 @@ def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
     Returns:
         A Callable that wraps the original command function, adding audit logging functionality.
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -35,17 +38,17 @@ def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
             result = await func(*args, **kwargs)
 
             # --- After successful command execution, perform the audit logging ---
-            
+
             # Use `inspect.signature` to bind the passed arguments to their parameter names.
             # This allows easy access to argument values by name (e.g., `bound_args.arguments['ctx']`).
             sig = inspect.signature(func)
             bound_args = sig.bind(*args, **kwargs)
-            bound_args.apply_defaults() # Apply default values for missing arguments
+            bound_args.apply_defaults()  # Apply default values for missing arguments
 
             # Extract the `ctx` (Context) object from the bound arguments.
             # The decorator expects `ctx` to be present as the first argument in commands.
-            ctx = bound_args.arguments.get('ctx')
-            
+            ctx = bound_args.arguments.get("ctx")
+
             # If `ctx` is not a valid Discord `Context` or if there's no guild (e.g., DM channel),
             # then audit logging is not applicable for this event, so we return early.
             if not isinstance(ctx, Context) or not ctx.guild:
@@ -76,9 +79,11 @@ def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
                 event_type=event_type,
                 user_id=ctx.author.id,
                 channel_id=channel_id,
-                details=details
+                details=details,
             )
-            
+
             return result
+
         return wrapper
+
     return decorator

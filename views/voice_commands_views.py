@@ -1,22 +1,26 @@
 # VoiceMaster2.0/views/voice_commands_views.py
+import asyncio
+import logging
+from typing import Literal, Optional, cast
+
 import discord
 from discord import ui
 from discord.ext.commands import Context
-import asyncio
-import logging
-from typing import cast, Literal, Optional
-
-from main import VoiceMasterBot
-from interfaces.guild_service import IGuildService
-from interfaces.audit_log_service import IAuditLogService
-from database.models import AuditLogEventType, Guild
 from discord.interactions import Interaction
+
+from database.models import AuditLogEventType, Guild
+from interfaces.audit_log_service import IAuditLogService
+from interfaces.guild_service import IGuildService
+from main import VoiceMasterBot
+from utils.db_helpers import is_db_value_equal
+
 
 class AuthorOnlyView(ui.View):
     """
     A base View that only allows the original command author to interact.
     Includes robust error handling and automatic component disabling on timeout.
     """
+
     def __init__(self, ctx: Context, **kwargs):
         super().__init__(**kwargs)
         self.ctx = ctx
@@ -43,36 +47,39 @@ class AuthorOnlyView(ui.View):
         else:
             await interaction.response.send_message(message, ephemeral=True)
 
+
 class RenameView(AuthorOnlyView):
     """
     A view with buttons to rename the creation channel or category.
     """
+
     def __init__(self, ctx: Context):
         super().__init__(ctx, timeout=180.0)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
 
-    async def _perform_rename(self, interaction: discord.Interaction, target: Literal['channel', 'category']):
+    async def _perform_rename(self, interaction: discord.Interaction, target: Literal["channel", "category"]):
         """A helper method to handle the renaming logic."""
         prompt = f"Please type the new name for the 'Join to Create' {target}:"
         await interaction.response.send_message(prompt, ephemeral=True)
-        
-        try:
-            msg = await self.bot.wait_for('message', check=lambda m: m.author == self.ctx.author and m.channel == self.ctx.channel, timeout=60.0)
-            await msg.delete() # Clean up the user's message immediately
 
-            if not self.ctx.guild: return
+        try:
+            msg = await self.bot.wait_for("message", check=lambda m: m.author == self.ctx.author and m.channel == self.ctx.channel, timeout=60.0)
+            await msg.delete()  # Clean up the user's message immediately
+
+            if not self.ctx.guild:
+                return
 
             config = await self.guild_service.get_guild_config(self.ctx.guild.id)
-            if not config:
+            if config is None:  # Check for None
                 return await interaction.followup.send("Error: Bot not configured correctly.", ephemeral=True)
 
-            target_id = config.creation_channel_id if target == 'channel' else config.voice_category_id
+            target_id = config.creation_channel_id if target == "channel" else config.voice_category_id
             if not isinstance(target_id, int):
                 return await interaction.followup.send(f"Error: Configured {target} not found.", ephemeral=True)
 
             discord_obj = self.ctx.guild.get_channel(target_id)
-            if not discord_obj:
+            if discord_obj is None:  # Check for None
                 return await interaction.followup.send(f"Error: The configured {target} could not be found in this server.", ephemeral=True)
 
             old_name = discord_obj.name
@@ -82,10 +89,13 @@ class RenameView(AuthorOnlyView):
             await asyncio.sleep(10)
             await response_msg.delete()
 
-            event_type = AuditLogEventType.CHANNEL_RENAMED if target == 'channel' else AuditLogEventType.CATEGORY_RENAMED
+            event_type = AuditLogEventType.CHANNEL_RENAMED if target == "channel" else AuditLogEventType.CATEGORY_RENAMED
             await self.audit_log_service.log_event(
-                guild_id=self.ctx.guild.id, event_type=event_type, user_id=self.ctx.author.id,
-                channel_id=discord_obj.id, details=f"Renamed {target} from '{old_name}' to '{msg.content}'."
+                guild_id=self.ctx.guild.id,
+                event_type=event_type,
+                user_id=self.ctx.author.id,
+                channel_id=discord_obj.id,
+                details=f"Renamed {target} from '{old_name}' to '{msg.content}'.",
             )
 
         except asyncio.TimeoutError:
@@ -95,34 +105,40 @@ class RenameView(AuthorOnlyView):
 
     @ui.button(label="Rename 'Join' Channel", style=discord.ButtonStyle.primary, emoji="✏️")
     async def rename_channel_button(self, interaction: discord.Interaction, button: ui.Button):
-        await self._perform_rename(interaction, 'channel')
+        await self._perform_rename(interaction, "channel")
 
     @ui.button(label="Rename Category", style=discord.ButtonStyle.primary, emoji="✏️")
     async def rename_category_button(self, interaction: discord.Interaction, button: ui.Button):
-        await self._perform_rename(interaction, 'category')
+        await self._perform_rename(interaction, "category")
+
 
 class SelectView(AuthorOnlyView):
     """
     A view with dropdowns to select a new creation channel or category.
     """
+
     def __init__(self, ctx: Context, voice_channels: list, categories: list):
         super().__init__(ctx, timeout=180.0)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
 
         channel_options = [discord.SelectOption(label=c.name, value=str(c.id)) for c in voice_channels[:25]]
-        channel_select = ui.Select(placeholder="Select a new 'Join to Create' channel...", options=channel_options, custom_id="channel_select")
-        channel_select.callback = self.channel_select_callback
+        channel_select: ui.Select = ui.Select(placeholder="Select a new 'Join to Create' channel...", options=channel_options, custom_id="channel_select")
+        channel_select.callback = self.channel_select_callback  # type: ignore
         self.add_item(channel_select)
 
         category_options = [discord.SelectOption(label=c.name, value=str(c.id)) for c in categories[:25]]
-        category_select = ui.Select(placeholder="Select a new category for temp channels...", options=category_options, custom_id="category_select")
-        category_select.callback = self.category_select_callback
+        category_select: ui.Select = ui.Select(
+            placeholder="Select a new category for temp channels...",
+            options=category_options,
+            custom_id="category_select",
+        )
+        category_select.callback = self.category_select_callback  # type: ignore
         self.add_item(category_select)
 
-    async def _update_selection(self, interaction: Interaction, target: Literal['channel', 'category']):
+    async def _update_selection(self, interaction: Interaction, target: Literal["channel", "category"]):
         await interaction.response.defer(ephemeral=True)
-        
+
         # --- 1. Guard Clauses for pre-conditions ---
         guild = self.ctx.guild
         if not guild or not guild.owner_id:
@@ -130,30 +146,30 @@ class SelectView(AuthorOnlyView):
             return
 
         config = await self.guild_service.get_guild_config(guild.id)
-        if not config:
+        if config is None:  # Check for None
             return await interaction.followup.send("Error: Bot not configured correctly.", ephemeral=True)
 
-        if interaction.data is None or 'values' not in interaction.data:
+        if interaction.data is None or "values" not in interaction.data:
             return await interaction.followup.send("Error: Invalid interaction data.", ephemeral=True)
-            
+
         if not isinstance(config.creation_channel_id, int) or not isinstance(config.voice_category_id, int):
             return await interaction.followup.send("Error: Voice category is not configured.", ephemeral=True)
 
         # --- 2. Prepare parameters for the update ---
         selected_id = int(interaction.data["values"][0])
         owner_id = guild.owner_id
-        
+
         new_channel_id: int
         new_category_id: int
         event: AuditLogEventType
         old_id: Optional[int]
 
-        if target == 'channel':
+        if target == "channel":
             new_channel_id = selected_id
             new_category_id = config.voice_category_id
             event = AuditLogEventType.CREATION_CHANNEL_CHANGED
             old_id = config.creation_channel_id
-        else: # target == 'category'
+        else:  # target == 'category'
             new_channel_id = config.creation_channel_id
             new_category_id = selected_id
             event = AuditLogEventType.VOICE_CATEGORY_CHANGED
@@ -163,29 +179,29 @@ class SelectView(AuthorOnlyView):
         await self.guild_service.create_or_update_guild(guild.id, owner_id, new_category_id, new_channel_id)
 
         await interaction.followup.send(f"✅ Configuration updated. The new {target} is <#{selected_id}>!", ephemeral=True)
-        
+
         await self.audit_log_service.log_event(
-            guild_id=guild.id, 
-            event_type=event, 
+            guild_id=guild.id,
+            event_type=event,
             user_id=self.ctx.author.id,
-            channel_id=selected_id, 
-            details=f"Changed {target} from {old_id} to {selected_id}."
+            channel_id=selected_id,
+            details=f"Changed {target} from {old_id} to {selected_id}.",
         )
         self.stop()
 
     async def channel_select_callback(self, interaction: Interaction):
-        await self._update_selection(interaction, 'channel')
+        await self._update_selection(interaction, "channel")
 
     async def category_select_callback(self, interaction: Interaction):
-        await self._update_selection(interaction, 'category')
+        await self._update_selection(interaction, "category")
 
 
 class ConfigView(AuthorOnlyView):
     """
     An interactive, persistent view for managing guild-specific bot configurations.
     """
+
     def __init__(self, ctx: Context, guild_config: Guild):
-        # Setting timeout=None makes the view persistent until the bot restarts.
         super().__init__(ctx, timeout=None)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
@@ -193,49 +209,67 @@ class ConfigView(AuthorOnlyView):
         self._update_button_states()
 
     def _update_button_states(self):
-        enable_button = next((child for child in self.children if isinstance(child, ui.Button) and child.custom_id == "enable_cleanup"), None)
-        disable_button = next((child for child in self.children if isinstance(child, ui.Button) and child.custom_id == "disable_cleanup"), None)
-
-        if enable_button:
-            enable_button.disabled = self.guild_config.cleanup_on_startup
-        if disable_button:
-            disable_button.disabled = not self.guild_config.cleanup_on_startup
+        """Disables/Enables buttons based on the current config state."""
+        for item in self.children:
+            if isinstance(item, ui.Button):
+                if item.custom_id == "enable_cleanup":
+                    item.disabled = is_db_value_equal(self.guild_config.cleanup_on_startup, True)
+                elif item.custom_id == "disable_cleanup":
+                    item.disabled = is_db_value_equal(self.guild_config.cleanup_on_startup, False)
 
     async def _update_config(self, interaction: discord.Interaction, new_state: bool):
+        if not self.ctx.guild:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+
+        if self.guild_config is None:
+            await interaction.response.send_message("Guild configuration not found.", ephemeral=True)
+            return
+
+        details = f"Automatic cleanup on startup changed from {self.guild_config.cleanup_on_startup} to {new_state}."
+
+        # Update the database
         await self.guild_service.set_cleanup_on_startup(self.ctx.guild.id, new_state)
-        self.guild_config.cleanup_on_startup = new_state
+
+        # Refresh local state from the database
+        refreshed_config = await self.guild_service.get_guild_config(self.ctx.guild.id)
+        if refreshed_config is None:
+            await interaction.response.send_message("Error: Could not retrieve updated guild configuration.", ephemeral=True)
+            self.stop()
+            return
+        self.guild_config = refreshed_config
+
+        # Update the UI
         self._update_button_states()
-        
+
         status_message = "Enabled" if new_state else "Disabled"
         status_icon = "✅" if new_state else "❌"
-        
+
         embed = discord.Embed(
             title=f"VoiceMaster Config for {self.ctx.guild.name}",
             description="Use the buttons below to manage bot settings for this server.",
-            color=discord.Color.orange()
+            color=discord.Color.orange(),
         )
         embed.add_field(
             name="Automatic Channel Cleanup on Startup",
             value=f"{status_icon} Status: **{status_message}**\nThis feature automatically deletes empty temporary channels when the bot starts.",
-            inline=False
+            inline=False,
         )
-        
+
         await interaction.response.edit_message(embed=embed, view=self)
 
-        # Log the consolidated action to the audit log
-        details = f"User {interaction.user.display_name} ({interaction.user.id}) changed automatic cleanup to '{status_message}'."
+        # Log the action
         await self.audit_log_service.log_event(
             guild_id=self.ctx.guild.id,
             event_type=AuditLogEventType.CLEANUP_STATE_CHANGED,
             user_id=interaction.user.id,
-            details=details
+            details=details,
         )
 
     @ui.button(label="Enable Cleanup", style=discord.ButtonStyle.success, custom_id="enable_cleanup")
-    async def enable_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def enable_cleanup_button(self, interaction: discord.Interaction, button: ui.Button):
         await self._update_config(interaction, True)
 
     @ui.button(label="Disable Cleanup", style=discord.ButtonStyle.danger, custom_id="disable_cleanup")
-    async def disable_button(self, interaction: discord.Interaction, button: ui.Button):
+    async def disable_cleanup_button(self, interaction: discord.Interaction, button: ui.Button):
         await self._update_config(interaction, False)
-        

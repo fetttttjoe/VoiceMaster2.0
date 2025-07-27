@@ -2,3 +2,7 @@ __pycache__
 .env
 coverage.xml
 .coverage
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
