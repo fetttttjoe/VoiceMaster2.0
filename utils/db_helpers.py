@@ -1,14 +1,13 @@
 # VoiceMaster2.0/utils/db_helpers.py
-from typing import TypeVar, Optional, Union, cast, Any
+from typing import Any, Optional, TypeVar, Union
+
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 # Define a TypeVar for generic type hinting
-T = TypeVar('T')
+T = TypeVar("T")
 
-def is_db_value_equal(
-    db_attribute: Union[T, InstrumentedAttribute[T], None],
-    value_to_compare: T
-) -> bool:
+
+def is_db_value_equal(db_attribute: Union[T, InstrumentedAttribute[T], None], value_to_compare: T) -> bool:
     """
     Safely compares a SQLAlchemy model attribute to a Python value.
 
@@ -33,7 +32,7 @@ def is_db_value_equal(
     # or an unloaded relationship that is None), it cannot be equal to any value.
     if db_attribute is None:
         return False
-    
+
     # Explicitly cast the SQLAlchemy comparison result to bool.
     # This tells `Pylance` (and other static analysis tools) to trust that the
     # outcome of `db_attribute == value_to_compare` will indeed be a simple boolean,
@@ -41,6 +40,7 @@ def is_db_value_equal(
     # and not just the raw value at the time of static analysis. At runtime, SQLAlchemy
     # handles the comparison correctly.
     return bool(db_attribute == value_to_compare)
+
 
 def get_db_attribute(obj: Any, attribute_name: str) -> Optional[Any]:
     """

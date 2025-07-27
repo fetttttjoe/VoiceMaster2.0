@@ -1,8 +1,11 @@
-from typing import Optional
-from interfaces.voice_channel_service import IVoiceChannelService
+from typing import Optional, cast
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from database import crud
-from database.models import VoiceChannel, UserSettings # Used for type hinting
+from database.models import UserSettings, VoiceChannel  # Used for type hinting
+from interfaces.voice_channel_service import IVoiceChannelService
+
 
 class VoiceChannelService(IVoiceChannelService):
     """
@@ -14,6 +17,7 @@ class VoiceChannelService(IVoiceChannelService):
     It relies on data access abstractions (`IVoiceChannelRepository`, `IUserSettingsRepository`)
     for data persistence.
     """
+
     def __init__(self, session: AsyncSession):
         self._session = session
 
@@ -27,7 +31,7 @@ class VoiceChannelService(IVoiceChannelService):
         Returns:
             The `VoiceChannel` object if found, otherwise `None`.
         """
-        return await crud.get_voice_channel_by_owner(self._session, owner_id)
+        return cast(Optional[VoiceChannel], await crud.get_voice_channel_by_owner(self._session, owner_id))
 
     async def get_voice_channel(self, channel_id: int) -> Optional[VoiceChannel]:
         """
@@ -39,7 +43,7 @@ class VoiceChannelService(IVoiceChannelService):
         Returns:
             The `VoiceChannel` object if found, otherwise `None`.
         """
-        return await crud.get_voice_channel(self._session, channel_id)
+        return cast(Optional[VoiceChannel], await crud.get_voice_channel(self._session, channel_id))
 
     async def delete_voice_channel(self, channel_id: int) -> None:
         """
@@ -88,7 +92,7 @@ class VoiceChannelService(IVoiceChannelService):
         Returns:
             The `UserSettings` object if found, otherwise `None`.
         """
-        return await crud.get_user_settings(self._session, user_id)
+        return cast(Optional[UserSettings], await crud.get_user_settings(self._session, user_id))
 
     async def update_user_channel_name(self, user_id: int, name: str) -> None:
         """

@@ -1,32 +1,29 @@
 import logging
-from typing import Optional, List, TYPE_CHECKING
-import discord
+from typing import TYPE_CHECKING, List, Optional, cast
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from database import crud
+from database.models import Guild, VoiceChannel
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
-from database.models import Guild, VoiceChannel
-from sqlalchemy.ext.asyncio import AsyncSession
-from database import crud
 
 if TYPE_CHECKING:
     from main import VoiceMasterBot
+
 
 class GuildService(IGuildService):
     """
     Implements the business logic for guild-related operations.
     """
-    def __init__(
-        self,
-        session: AsyncSession,
-        voice_channel_service: IVoiceChannelService,
-        bot: 'VoiceMasterBot'
-    ):
+
+    def __init__(self, session: AsyncSession, voice_channel_service: IVoiceChannelService, bot: "VoiceMasterBot"):
         self._session = session
         self._voice_channel_service = voice_channel_service
         self._bot = bot
 
     async def get_guild_config(self, guild_id: int) -> Optional[Guild]:
-        return await crud.get_guild(self._session, guild_id)
+        return cast(Optional[Guild], await crud.get_guild(self._session, guild_id))
 
     async def create_or_update_guild(self, guild_id: int, owner_id: int, category_id: int, channel_id: int) -> None:
         """
@@ -53,10 +50,10 @@ class GuildService(IGuildService):
         Returns:
             A list of `VoiceChannel` objects.
         """
-        return await crud.get_all_voice_channels(self._session)
+        return cast(List[VoiceChannel], await crud.get_all_voice_channels(self._session))
 
     async def get_voice_channels_by_guild(self, guild_id: int) -> List[VoiceChannel]:
-        return await crud.get_voice_channels_by_guild(self._session, guild_id)
+        return cast(List[VoiceChannel], await crud.get_voice_channels_by_guild(self._session, guild_id))
 
     async def set_cleanup_on_startup(self, guild_id: int, enabled: bool) -> None:
         """
@@ -64,36 +61,12 @@ class GuildService(IGuildService):
         """
         await crud.update_guild_cleanup_flag(self._session, guild_id, enabled)
 
-    async def cleanup_guild_channels(self, guild_id: int) -> None:
+    async def cleanup_stale_channels(self, channel_ids: List[int]) -> None:
         """
-        Cleans up the managed voice channel category for a specific guild,
-        if the feature is enabled for that guild.
+        Deletes a list of voice channels from the database.
+
+        This is called after the Discord channels have already been deleted.
         """
-        guild_config = await self.get_guild_config(guild_id)
-        if not guild_config or not guild_config.cleanup_on_startup:
-            return
-        
-        if not guild_config.voice_category_id or not guild_config.creation_channel_id:
-            return
-
-        category = self._bot.get_channel(guild_config.voice_category_id)
-        if not isinstance(category, discord.CategoryChannel):
-            return
-
-        logging.info(f"Running category purge for '{category.name}' in guild '{category.guild.name}'...")
-        purged_count = 0
-        for channel in category.voice_channels:
-            if channel.id == guild_config.creation_channel_id:
-                continue
-
-            if len(channel.members) == 0:
-                logging.info(f"PURGING: Empty channel '{channel.name}' ({channel.id}) found in managed category.")
-                try:
-                    await channel.delete(reason="Bot startup cleanup: Purging empty temporary channel.")
-                    await self._voice_channel_service.delete_voice_channel(channel.id)
-                    purged_count += 1
-                except discord.HTTPException as e:
-                    logging.error(f"Failed to purge channel {channel.id}: {e}")
-
-        if purged_count > 0:
-            logging.info(f"Category purge complete for '{category.name}'. Removed {purged_count} empty channels.")
+        for channel_id in channel_ids:
+            await self._voice_channel_service.delete_voice_channel(channel_id)
+        logging.info(f"Successfully purged {len(channel_ids)} stale channel records from the database.")

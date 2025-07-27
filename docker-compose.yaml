@@ -2,8 +2,6 @@ services:
   bot:
     build: .
     restart: always
-    env_file:
-      - .env
     volumes:
       - .:/usr/src/app
     depends_on:
@@ -15,8 +13,6 @@ services:
   db:
     image: postgres:14-alpine
     restart: always
-    env_file:
-      - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -33,12 +29,16 @@ services:
 
   test:
     build: .
-    env_file: .env
     volumes:
       - .:/usr/src/app
     depends_on:
       db:
         condition: service_healthy
     command: ["pytest", "--cov=.", "--cov-report=term-missing"]
+  lint:
+    build: .
+    volumes:
+      - .:/usr/src/app
+    command: ["sh", "-c", "pip install -r requirements-dev.txt && ruff check . --no-cache && mypy --cache-dir /dev/null ."]
 volumes:
   postgres_data:

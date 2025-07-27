@@ -1,11 +1,13 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
-from . import models
-from sqlalchemy import desc
 from typing import Optional
+
+from sqlalchemy import delete, desc, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from . import models
 from .models import AuditLogEventType
 
 # --- Guild (Server) CRUD Operations ---
+
 
 async def get_guild(db: AsyncSession, guild_id: int):
     """
@@ -21,13 +23,8 @@ async def get_guild(db: AsyncSession, guild_id: int):
     result = await db.execute(select(models.Guild).where(models.Guild.id == guild_id))
     return result.scalar_one_or_none()
 
-async def create_or_update_guild(
-    db: AsyncSession,
-    guild_id: int,
-    owner_id: int,
-    category_id: int,
-    channel_id: int
-):
+
+async def create_or_update_guild(db: AsyncSession, guild_id: int, owner_id: int, category_id: int, channel_id: int):
     """
     Creates a new Guild entry or updates an existing one in the database.
 
@@ -45,18 +42,16 @@ async def create_or_update_guild(
     guild = await get_guild(db, guild_id)
     if guild:
         # Update existing guild configuration
-        stmt = (
-            update(models.Guild)
-            .where(models.Guild.id == guild_id)
-            .values(owner_id=owner_id, voice_category_id=category_id, creation_channel_id=channel_id)
-        )
+        stmt = update(models.Guild).where(models.Guild.id == guild_id).values(owner_id=owner_id, voice_category_id=category_id, creation_channel_id=channel_id)
         await db.execute(stmt)
     else:
         # Create a new guild entry
         db.add(models.Guild(id=guild_id, owner_id=owner_id, voice_category_id=category_id, creation_channel_id=channel_id))
-    await db.commit() # Commit the changes to the database
+    await db.commit()  # Commit the changes to the database
+
 
 # --- Voice Channel CRUD Operations ---
+
 
 async def get_voice_channel_by_owner(db: AsyncSession, owner_id: int):
     """
@@ -74,6 +69,7 @@ async def get_voice_channel_by_owner(db: AsyncSession, owner_id: int):
     result = await db.execute(select(models.VoiceChannel).where(models.VoiceChannel.owner_id == owner_id))
     return result.scalar_one_or_none()
 
+
 async def get_voice_channel(db: AsyncSession, channel_id: int):
     """
     Retrieves a VoiceChannel entry by its channel ID.
@@ -88,6 +84,7 @@ async def get_voice_channel(db: AsyncSession, channel_id: int):
     result = await db.execute(select(models.VoiceChannel).where(models.VoiceChannel.channel_id == channel_id))
     return result.scalar_one_or_none()
 
+
 async def get_all_voice_channels(db: AsyncSession):
     """
     Gets all active temporary voice channels from the database.
@@ -101,26 +98,23 @@ async def get_all_voice_channels(db: AsyncSession):
     result = await db.execute(select(models.VoiceChannel))
     return result.scalars().all()
 
+
 async def get_voice_channels_by_guild(db: AsyncSession, guild_id: int):
     """
     Gets all active temporary voice channels for a specific guild.
     """
-    result = await db.execute(
-        select(models.VoiceChannel).where(models.VoiceChannel.guild_id == guild_id)
-    )
+    result = await db.execute(select(models.VoiceChannel).where(models.VoiceChannel.guild_id == guild_id))
     return result.scalars().all()
-  
+
+
 async def update_guild_cleanup_flag(db: AsyncSession, guild_id: int, enabled: bool):
     """
     Updates the cleanup_on_startup flag for a specific guild.
     """
-    stmt = (
-        update(models.Guild)
-        .where(models.Guild.id == guild_id)
-        .values(cleanup_on_startup=enabled)
-    )
+    stmt = update(models.Guild).where(models.Guild.id == guild_id).values(cleanup_on_startup=enabled)
     await db.execute(stmt)
     await db.commit()
+
 
 async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int, guild_id):
     """
@@ -132,7 +126,8 @@ async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int,
         owner_id: The ID of the user who owns this channel.
     """
     db.add(models.VoiceChannel(channel_id=channel_id, owner_id=owner_id, guild_id=guild_id))
-    await db.commit() # Commit the new entry
+    await db.commit()  # Commit the new entry
+
 
 async def delete_voice_channel(db: AsyncSession, channel_id: int):
     """
@@ -144,7 +139,8 @@ async def delete_voice_channel(db: AsyncSession, channel_id: int):
     """
     stmt = delete(models.VoiceChannel).where(models.VoiceChannel.channel_id == channel_id)
     await db.execute(stmt)
-    await db.commit() # Commit the deletion
+    await db.commit()  # Commit the deletion
+
 
 async def update_voice_channel_owner(db: AsyncSession, channel_id: int, new_owner_id: int):
     """
@@ -157,10 +153,11 @@ async def update_voice_channel_owner(db: AsyncSession, channel_id: int, new_owne
     """
     stmt = update(models.VoiceChannel).where(models.VoiceChannel.channel_id == channel_id).values(owner_id=new_owner_id)
     await db.execute(stmt)
-    await db.commit() # Commit the owner update
+    await db.commit()  # Commit the owner update
 
 
 # --- User Settings CRUD Operations ---
+
 
 async def get_user_settings(db: AsyncSession, user_id: int):
     """
@@ -177,6 +174,7 @@ async def get_user_settings(db: AsyncSession, user_id: int):
     """
     result = await db.execute(select(models.UserSettings).where(models.UserSettings.user_id == user_id))
     return result.scalar_one_or_none()
+
 
 async def update_user_channel_name(db: AsyncSession, user_id: int, name: str):
     """
@@ -195,7 +193,8 @@ async def update_user_channel_name(db: AsyncSession, user_id: int, name: str):
     else:
         # Create new user settings
         db.add(models.UserSettings(user_id=user_id, custom_channel_name=name))
-    await db.commit() # Commit the changes
+    await db.commit()  # Commit the changes
+
 
 async def update_user_channel_limit(db: AsyncSession, user_id: int, limit: int):
     """
@@ -214,17 +213,19 @@ async def update_user_channel_limit(db: AsyncSession, user_id: int, limit: int):
     else:
         # Create new user settings
         db.add(models.UserSettings(user_id=user_id, custom_channel_limit=limit))
-    await db.commit() # Commit the changes
+    await db.commit()  # Commit the changes
+
 
 # --- Audit Log CRUD Operations ---
+
 
 async def create_audit_log_entry(
     db: AsyncSession,
     guild_id: int,
-    event_type: AuditLogEventType, # Using the Enum type directly for clarity
+    event_type: AuditLogEventType,  # Using the Enum type directly for clarity
     user_id: Optional[int] = None,
     channel_id: Optional[int] = None,
-    details: Optional[str] = None
+    details: Optional[str] = None,
 ):
     """
     Creates a new audit log entry in the database.
@@ -237,14 +238,17 @@ async def create_audit_log_entry(
         channel_id: Optional. The ID of the channel associated with the event.
         details: Optional. A detailed description of the event.
     """
-    db.add(models.AuditLogEntry(
-        guild_id=guild_id,
-        user_id=user_id,
-        channel_id=channel_id,
-        event_type=event_type.value, # Store the string value of the Enum
-        details=details
-    ))
-    await db.commit() # Commit the new log entry
+    db.add(
+        models.AuditLogEntry(
+            guild_id=guild_id,
+            user_id=user_id,
+            channel_id=channel_id,
+            event_type=event_type.value,  # Store the string value of the Enum
+            details=details,
+        )
+    )
+    await db.commit()  # Commit the new log entry
+
 
 async def get_latest_audit_log_entries(db: AsyncSession, guild_id: int, limit: int = 10):
     """
@@ -258,10 +262,5 @@ async def get_latest_audit_log_entries(db: AsyncSession, guild_id: int, limit: i
     Returns:
         A list of AuditLogEntry model objects.
     """
-    result = await db.execute(
-        select(models.AuditLogEntry)
-        .where(models.AuditLogEntry.guild_id == guild_id)
-        .order_by(desc(models.AuditLogEntry.timestamp))
-        .limit(limit)
-    )
+    result = await db.execute(select(models.AuditLogEntry).where(models.AuditLogEntry.guild_id == guild_id).order_by(desc(models.AuditLogEntry.timestamp)).limit(limit))
     return result.scalars().all()
