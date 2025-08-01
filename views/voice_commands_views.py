@@ -47,6 +47,28 @@ class AuthorOnlyView(ui.View):
         else:
             await interaction.response.send_message(message, ephemeral=True)
 
+    async def disable_components(self):
+        """
+        Disables all components in the view and edits the original message if available.
+        """
+        for item in self.children:
+            if isinstance(item, (ui.Button, ui.Select)):
+                item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.NotFound:
+                logging.warning(f"Could not find message {self.message.id} to disable its components.")
+            except discord.HTTPException as e:
+                logging.error(f"Failed to edit message {self.message.id} to disable components: {e}")
+
+    async def on_timeout(self) -> None:
+        """
+        Handles the view timeout by disabling all components.
+        """
+        await self.disable_components()
+        self.stop()
+
 
 class RenameView(AuthorOnlyView):
     """
@@ -101,6 +123,7 @@ class RenameView(AuthorOnlyView):
         except asyncio.TimeoutError:
             await interaction.followup.send("Rename timed out. Please try again.", ephemeral=True)
         finally:
+            await self.disable_components()
             self.stop()
 
     @ui.button(label="Rename 'Join' Channel", style=discord.ButtonStyle.primary, emoji="✏️")
@@ -187,6 +210,8 @@ class SelectView(AuthorOnlyView):
             channel_id=selected_id,
             details=f"Changed {target} from {old_id} to {selected_id}.",
         )
+
+        await self.disable_components()
         self.stop()
 
     async def channel_select_callback(self, interaction: Interaction):

@@ -3,9 +3,83 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 import pytest
+from discord import ui
 
 from database.models import Guild
-from views.voice_commands_views import ConfigView, RenameView, SelectView
+from views.voice_commands_views import AuthorOnlyView, ConfigView, RenameView, SelectView
+
+
+@pytest.mark.asyncio
+async def test_interaction_check_author_is_allowed(mock_ctx):
+    """
+    Tests that the original author is allowed to interact.
+    """
+    view = AuthorOnlyView(mock_ctx)
+    mock_interaction = AsyncMock()
+    mock_interaction.user.id = mock_ctx.author.id
+
+    assert await view.interaction_check(mock_interaction) is True
+
+
+@pytest.mark.asyncio
+async def test_interaction_check_other_user_is_denied(mock_ctx):
+    """
+    Tests that a user other than the author is denied interaction.
+    """
+    view = AuthorOnlyView(mock_ctx)
+    mock_interaction = AsyncMock()
+    mock_interaction.user.id = 9999  # A different user ID
+
+    assert await view.interaction_check(mock_interaction) is False
+    mock_interaction.response.send_message.assert_called_once_with(
+        "You are not authorized to interact with this component.", ephemeral=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_on_timeout_disables_components(mock_ctx):
+    """
+    Tests that on_timeout correctly disables all components.
+    """
+    view = AuthorOnlyView(mock_ctx, timeout=0.1)
+    view.message = AsyncMock()
+
+    # Add some components to the view
+    button = ui.Button(label="Test")
+    select = ui.Select(options=[discord.SelectOption(label="A")])
+    view.add_item(button)
+    view.add_item(select)
+
+    # Mock disable_components to check if it's called
+    view.disable_components = AsyncMock()
+
+    await view.on_timeout()
+
+    view.disable_components.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_disable_components_disables_items_and_edits_message(mock_ctx):
+    """
+    Tests that disable_components disables all items and edits the message.
+    """
+    view = AuthorOnlyView(mock_ctx)
+    view.message = AsyncMock()
+
+    # Add components
+    button = ui.Button(label="Click Me")
+    select = ui.Select(placeholder="Choose...")
+    view.add_item(button)
+    view.add_item(select)
+
+    await view.disable_components()
+
+    # Assert that all components are disabled
+    for item in view.children:
+        assert item.disabled is True
+
+    # Assert that the message was edited with the updated view
+    view.message.edit.assert_called_once_with(view=view)
 
 
 @pytest.mark.asyncio
@@ -203,3 +277,4 @@ async def test_config_view_disable_cleanup(mock_ctx):
     mock_guild_service.set_cleanup_on_startup.assert_called_once_with(mock_ctx.guild.id, False)
     # Check that the message was edited
     mock_interaction.response.edit_message.assert_called_once()
+

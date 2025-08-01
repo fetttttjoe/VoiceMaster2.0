@@ -1,9 +1,7 @@
-# VoiceMaster2.0/utils/db_helpers.py
 from typing import Any, Optional, TypeVar, Union
 
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
-# Define a TypeVar for generic type hinting
 T = TypeVar("T")
 
 

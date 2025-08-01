@@ -1,5 +1,4 @@
-# VoiceMaster2.0/database/models.py
-from enum import Enum  # Standard library enum for defining fixed sets of names/values
+from enum import Enum
 
 from sqlalchemy import (
     BigInteger,
@@ -16,7 +15,6 @@ from sqlalchemy.sql import func
 from .base import Base
 
 
-# --- Enum for Audit Log Event Types ---
 class AuditLogEventType(Enum):
     """
     Defines the types of events that can be logged in the audit trail.
@@ -71,28 +69,24 @@ class AuditLogEventType(Enum):
     UNKNOWN_ERROR = "UNKNOWN_ERROR"
 
 
-# --- Guild Model ---
 class Guild(Base):
     """
     Represents a Discord guild (server) and its main configuration settings.
     This includes settings relevant to the bot's operation within that guild.
     """
 
-    __tablename__ = "guilds"  # Database table name
+    __tablename__ = "guilds"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    owner_id = Column(BigInteger, nullable=False)  # The ID of the guild's owner (Discord user ID)
-    voice_category_id = Column(BigInteger, nullable=True)  # The ID of the category where temp voice channels are created
-    creation_channel_id = Column(BigInteger, nullable=True)  # The ID of the voice channel users join to create new channels
+    owner_id = Column(BigInteger, nullable=False)
+    voice_category_id = Column(BigInteger, nullable=True)
+    creation_channel_id = Column(BigInteger, nullable=True)
     cleanup_on_startup = Column(Boolean, default=True, nullable=False)
-    # One-to-one relationship with GuildSettings, allowing access to default settings
-    # `uselist=False` indicates a one-to-one relationship
     settings = relationship("GuildSettings", back_populates="guild", uselist=False)
     audit_logs = relationship("AuditLogEntry", back_populates="guild")
     voice_channels = relationship("VoiceChannel")
 
 
-# --- Guild Settings Model ---
 class GuildSettings(Base):
     """
     Stores default settings for temporary channels within a specific guild.
@@ -103,14 +97,12 @@ class GuildSettings(Base):
     __tablename__ = "guild_settings"
 
     guild_id = Column(BigInteger, ForeignKey("guilds.id"), primary_key=True)
-    default_channel_name = Column(String, default="{user}'s Channel")  # Template for default channel name
-    default_channel_limit = Column(Integer, default=0)  # Default user limit for channels (0 means no limit)
+    default_channel_name = Column(String, default="{user}'s Channel")
+    default_channel_limit = Column(Integer, default=0)
 
-    # Relationship back to the Guild model
     guild = relationship("Guild", back_populates="settings")
 
 
-# --- User Settings Model ---
 class UserSettings(Base):
     """
     Stores individual user preferences for their temporary voice channels.
@@ -120,11 +112,10 @@ class UserSettings(Base):
     __tablename__ = "user_settings"
 
     user_id = Column(BigInteger, primary_key=True, index=True)
-    custom_channel_name = Column(String, nullable=True)  # Custom name preference for user's channels
-    custom_channel_limit = Column(Integer, nullable=True)  # Custom user limit preference for user's channels
+    custom_channel_name = Column(String, nullable=True)
+    custom_channel_limit = Column(Integer, nullable=True)
 
 
-# --- Voice Channel Model ---
 class VoiceChannel(Base):
     """
     Represents an active temporary voice channel created by the bot.
@@ -133,12 +124,11 @@ class VoiceChannel(Base):
 
     __tablename__ = "voice_channels"
 
-    channel_id = Column(BigInteger, primary_key=True, index=True)  # Discord channel ID
-    owner_id = Column(BigInteger, nullable=False, index=True)  # The ID of the user who "owns" this channel
-    guild_id = Column(BigInteger, ForeignKey("guilds.id"), nullable=False, index=True)  # the guild where the channel belongs to
+    channel_id = Column(BigInteger, primary_key=True, index=True)
+    owner_id = Column(BigInteger, nullable=False, index=True)
+    guild_id = Column(BigInteger, ForeignKey("guilds.id"), nullable=False, index=True)
 
 
-# --- Audit Log Entry Model ---
 class AuditLogEntry(Base):
     """
     Records significant events and administrative actions performed by or through the bot.
@@ -147,12 +137,12 @@ class AuditLogEntry(Base):
 
     __tablename__ = "audit_log_entries"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)  # Unique ID for each log entry
-    guild_id = Column(BigInteger, ForeignKey("guilds.id"), nullable=False, index=True)  # The guild where the event occurred
-    user_id = Column(BigInteger, nullable=True)  # Optional: User associated with the event
-    channel_id = Column(BigInteger, nullable=True)  # Optional: Channel associated with the event
-    event_type = Column(String, nullable=False)  # Type of event, stored as string from AuditLogEventType enum
-    details = Column(String, nullable=True)  # Optional: Detailed description of the event
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())  # Timestamp of the event, defaults to current UTC time
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    guild_id = Column(BigInteger, ForeignKey("guilds.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, nullable=True)
+    channel_id = Column(BigInteger, nullable=True)
+    event_type = Column(String, nullable=False)
+    details = Column(String, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     guild = relationship("Guild", back_populates="audit_logs")

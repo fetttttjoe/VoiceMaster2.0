@@ -1,11 +1,10 @@
-# VoiceMaster2.0/tests/cogs/test_events.py
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
 import pytest
 
 from cogs.events import EventsCog
-from database.models import AuditLogEventType, Guild  # Make sure AuditLogEventType is imported
+from database.models import AuditLogEventType, Guild
 
 
 @pytest.mark.asyncio
@@ -13,12 +12,10 @@ async def test_on_ready_cleans_up_channels(mock_bot):
     """
     Tests that the on_ready event correctly identifies and purges empty channels.
     """
-    # --- Arrange ---
     guild_id = 123
     category_id = 456
     creation_channel_id = 789
 
-    # Mock Discord objects
     mock_creation_channel = MagicMock(spec=discord.VoiceChannel, id=creation_channel_id, members=[])
     mock_empty_channel = MagicMock(spec=discord.VoiceChannel, id=101, members=[], delete=AsyncMock())
     mock_occupied_channel = MagicMock(spec=discord.VoiceChannel, id=102, members=[MagicMock()])
@@ -31,7 +28,6 @@ async def test_on_ready_cleans_up_channels(mock_bot):
     mock_bot.guilds = [mock_guild]
     mock_bot.get_channel.return_value = mock_category
 
-    # Mock guild_config
     mock_guild_config = Guild(
         id=guild_id,
         cleanup_on_startup=True,
@@ -42,16 +38,11 @@ async def test_on_ready_cleans_up_channels(mock_bot):
 
     cog = EventsCog(mock_bot, mock_bot.guild_service, mock_bot.voice_channel_service, mock_bot.audit_log_service)
 
-    # --- Act ---
     await cog.on_ready()
 
-    # --- Assert ---
-    # Verify that the empty channel was deleted from Discord
     mock_empty_channel.delete.assert_called_once()
-    # Verify that the occupied and creation channels were NOT deleted
     mock_occupied_channel.delete.assert_not_called()
     mock_creation_channel.delete.assert_not_called()
-    # Verify that the service was called to clean up the database with the correct channel ID
     mock_bot.guild_service.cleanup_stale_channels.assert_called_once_with([mock_empty_channel.id])
 
 

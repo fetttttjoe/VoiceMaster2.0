@@ -6,8 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from . import models
 from .models import AuditLogEventType
 
-# --- Guild (Server) CRUD Operations ---
-
 
 async def get_guild(db: AsyncSession, guild_id: int):
     """
@@ -41,16 +39,11 @@ async def create_or_update_guild(db: AsyncSession, guild_id: int, owner_id: int,
     """
     guild = await get_guild(db, guild_id)
     if guild:
-        # Update existing guild configuration
         stmt = update(models.Guild).where(models.Guild.id == guild_id).values(owner_id=owner_id, voice_category_id=category_id, creation_channel_id=channel_id)
         await db.execute(stmt)
     else:
-        # Create a new guild entry
         db.add(models.Guild(id=guild_id, owner_id=owner_id, voice_category_id=category_id, creation_channel_id=channel_id))
-    await db.commit()  # Commit the changes to the database
-
-
-# --- Voice Channel CRUD Operations ---
+    await db.commit()
 
 
 async def get_voice_channel_by_owner(db: AsyncSession, owner_id: int):
@@ -126,7 +119,7 @@ async def create_voice_channel(db: AsyncSession, channel_id: int, owner_id: int,
         owner_id: The ID of the user who owns this channel.
     """
     db.add(models.VoiceChannel(channel_id=channel_id, owner_id=owner_id, guild_id=guild_id))
-    await db.commit()  # Commit the new entry
+    await db.commit()
 
 
 async def delete_voice_channel(db: AsyncSession, channel_id: int):
@@ -139,7 +132,7 @@ async def delete_voice_channel(db: AsyncSession, channel_id: int):
     """
     stmt = delete(models.VoiceChannel).where(models.VoiceChannel.channel_id == channel_id)
     await db.execute(stmt)
-    await db.commit()  # Commit the deletion
+    await db.commit()
 
 
 async def update_voice_channel_owner(db: AsyncSession, channel_id: int, new_owner_id: int):
@@ -153,10 +146,7 @@ async def update_voice_channel_owner(db: AsyncSession, channel_id: int, new_owne
     """
     stmt = update(models.VoiceChannel).where(models.VoiceChannel.channel_id == channel_id).values(owner_id=new_owner_id)
     await db.execute(stmt)
-    await db.commit()  # Commit the owner update
-
-
-# --- User Settings CRUD Operations ---
+    await db.commit()
 
 
 async def get_user_settings(db: AsyncSession, user_id: int):
@@ -187,13 +177,11 @@ async def update_user_channel_name(db: AsyncSession, user_id: int, name: str):
     """
     settings = await get_user_settings(db, user_id)
     if settings:
-        # Update existing user settings
         stmt = update(models.UserSettings).where(models.UserSettings.user_id == user_id).values(custom_channel_name=name)
         await db.execute(stmt)
     else:
-        # Create new user settings
         db.add(models.UserSettings(user_id=user_id, custom_channel_name=name))
-    await db.commit()  # Commit the changes
+    await db.commit()
 
 
 async def update_user_channel_limit(db: AsyncSession, user_id: int, limit: int):
@@ -213,16 +201,13 @@ async def update_user_channel_limit(db: AsyncSession, user_id: int, limit: int):
     else:
         # Create new user settings
         db.add(models.UserSettings(user_id=user_id, custom_channel_limit=limit))
-    await db.commit()  # Commit the changes
-
-
+    await db.commit()
 # --- Audit Log CRUD Operations ---
-
 
 async def create_audit_log_entry(
     db: AsyncSession,
     guild_id: int,
-    event_type: AuditLogEventType,  # Using the Enum type directly for clarity
+    event_type: AuditLogEventType,
     user_id: Optional[int] = None,
     channel_id: Optional[int] = None,
     details: Optional[str] = None,
@@ -243,11 +228,11 @@ async def create_audit_log_entry(
             guild_id=guild_id,
             user_id=user_id,
             channel_id=channel_id,
-            event_type=event_type.value,  # Store the string value of the Enum
+            event_type=event_type.value,
             details=details,
         )
     )
-    await db.commit()  # Commit the new log entry
+    await db.commit()
 
 
 async def get_latest_audit_log_entries(db: AsyncSession, guild_id: int, limit: int = 10):
