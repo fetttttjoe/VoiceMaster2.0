@@ -1,4 +1,3 @@
-# VoiceMaster2.0/tests/cogs/test_voice_commands.py
 from typing import Any, Callable, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 

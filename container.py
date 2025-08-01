@@ -3,13 +3,9 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from interfaces.audit_log_service import IAuditLogService
-
-# Abstractions
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
 from services.audit_log_service import AuditLogService
-
-# Implementations
 from services.guild_service import GuildService
 from services.voice_channel_service import VoiceChannelService
 
@@ -27,7 +23,6 @@ class Container:
         self._session = session
         self._bot = bot
 
-        # Services
         self.voice_channel_service: IVoiceChannelService = VoiceChannelService(self._session)
         self.audit_log_service: IAuditLogService = AuditLogService(self._session)
 

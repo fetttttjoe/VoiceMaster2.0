@@ -6,7 +6,6 @@ import discord
 import pytest
 from discord.ext import commands
 
-# Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from interfaces.guild_service import IGuildService

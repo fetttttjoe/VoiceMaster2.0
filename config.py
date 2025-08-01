@@ -4,10 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Discord
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Database
 DB_USER = os.getenv("POSTGRES_USER")
 DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
 DB_HOST = os.getenv("POSTGRES_HOST")

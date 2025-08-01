@@ -1,4 +1,3 @@
-# tests/utils/test_db_helpers.py
 from unittest.mock import MagicMock
 
 import pytest
@@ -6,7 +5,6 @@ from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from utils.db_helpers import get_db_attribute, is_db_value_equal
 
-# --- Fixtures ---
 
 @pytest.fixture
 def mock_db_object():
@@ -18,7 +16,6 @@ def mock_db_object():
     obj.nullable_field = None
     return obj
 
-# --- Tests for is_db_value_equal ---
 
 def test_is_db_value_equal_success():
     """
@@ -48,17 +45,12 @@ def test_is_db_value_equal_with_instrumented_attribute(mock_db_object):
     SQLAlchemy's `__eq__` overload handles the comparison at runtime,
     and our helper ensures the result is a clean boolean.
     """
-    # Simulate an InstrumentedAttribute for 'owner_id'
-    # In a real scenario, SQLAlchemy would manage this object.
-    # We mock its behavior for the test.
     instrumented_attr = MagicMock(spec=InstrumentedAttribute)
-    # When '==' is called on this mock, it will compare its "value"
     instrumented_attr.__eq__.side_effect = lambda other: (123 == other)
 
     assert is_db_value_equal(instrumented_attr, 123) is True
     assert is_db_value_equal(instrumented_attr, 456) is False
 
-# --- Tests for get_db_attribute ---
 
 def test_get_db_attribute_success(mock_db_object):
     """
