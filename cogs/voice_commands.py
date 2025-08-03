@@ -12,8 +12,10 @@ from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
 from main import VoiceMasterBot
 from services.audit_decorator import audit_log
+from utils import responses
 from utils.checks import is_channel_owner, is_in_voice_channel
 from utils.db_helpers import is_db_value_equal
+from utils.embed_helpers import create_embed
 from views.setup_view import SetupView
 from views.voice_commands_views import ConfigView, RenameView, SelectView
 
@@ -54,37 +56,20 @@ class VoiceCommandsCog(commands.Cog):
         without a subcommand (e.g., `.voice`), it sends an informative embed
         listing all available commands and their categories.
         """
-        embed = discord.Embed(
-            title="🎧 VoiceMaster Commands",
-            description="Here are all the commands to manage your temporary voice channels. "
-            "Commands require you to be in a voice channel you own or manage, "
-            "unless otherwise specified.",
-            color=discord.Color.blue(),
+        embed = create_embed(
+            title=responses.VOICE_HELP_TITLE,
+            description=responses.VOICE_HELP_DESCRIPTION,
+            footer=responses.VOICE_HELP_FOOTER.format(prefix=ctx.prefix),
         )
-        embed.set_footer(text=f"Use {ctx.prefix}voice <command> to get started.")
 
         embed.add_field(
-            name="🛠️ Admin Commands",
-            value=(
-                f"`{ctx.prefix}voice setup` - The first-time setup for the bot.\n"
-                f"`{ctx.prefix}voice edit rename` - Rename the creation channel or category.\n"
-                f"`{ctx.prefix}voice edit select` - Select a different creation channel or category.\n"
-                f"`{ctx.prefix}voice list` - Lists all active temporary channels.\n"
-                f"`{ctx.prefix}voice auditlog [count]` - Shows recent bot activity.\n"
-                f"`{ctx.prefix}voice config` - Opens an interactive menu for bot settings."
-            ),
+            name=responses.ADMIN_COMMANDS_TITLE,
+            value=responses.ADMIN_COMMANDS_VALUE.format(prefix=ctx.prefix),
             inline=False,
         )
         embed.add_field(
-            name="👤 User Commands",
-            value=(
-                f"`{ctx.prefix}voice lock` - Locks your current temporary channel.\n"
-                f"`{ctx.prefix}voice unlock` - Unlocks your current temporary channel.\n"
-                f"`{ctx.prefix}voice permit @user` - Permits a user to join your current locked temporary channel.\n"
-                f"`{ctx.prefix}voice claim` - Claims an empty, ownerless channel.\n"
-                f"`{ctx.prefix}voice name <new_name>` - Sets your default channel name.\n"
-                f"`{ctx.prefix}voice limit <number>` - Sets your default channel user limit."
-            ),
+            name=responses.USER_COMMANDS_TITLE,
+            value=responses.USER_COMMANDS_VALUE.format(prefix=ctx.prefix),
             inline=False,
         )
         await ctx.send(embed=embed)
@@ -98,20 +83,20 @@ class VoiceCommandsCog(commands.Cog):
 
         guild_config = await self._guild_service.get_guild_config(ctx.guild.id)
         if guild_config is None:
-            await ctx.send(f"The bot has not been set up yet. Run `{ctx.prefix}voice setup` first.", ephemeral=True)
+            await ctx.send(responses.BOT_NOT_SETUP.format(prefix=ctx.prefix), ephemeral=True)
             return
 
         cleanup_status = "Enabled" if is_db_value_equal(guild_config.cleanup_on_startup, True) else "Disabled"
         status_icon = "✅" if is_db_value_equal(guild_config.cleanup_on_startup, True) else "❌"
 
-        embed = discord.Embed(
-            title=f"VoiceMaster Config for {ctx.guild.name}",
-            description="Use the buttons below to manage bot settings for this server.",
+        embed = create_embed(
+            title=responses.CONFIG_TITLE.format(guild_name=ctx.guild.name),
+            description=responses.CONFIG_DESCRIPTION,
             color=discord.Color.orange(),
         )
         embed.add_field(
-            name="Automatic Channel Cleanup on Startup",
-            value=(f"{status_icon} Status: **{cleanup_status}**\nThis feature automatically deletes empty temporary channels when the bot starts."),
+            name=responses.CONFIG_CLEANUP_TITLE,
+            value=responses.CONFIG_CLEANUP_VALUE.format(status_icon=status_icon, cleanup_status=cleanup_status),
             inline=False,
         )
 
@@ -127,7 +112,7 @@ class VoiceCommandsCog(commands.Cog):
         Sets up the voice channel creation category and channel for the first time.
         """
         view = SetupView(ctx)
-        await ctx.send("Click the button to begin the setup process.", view=view)
+        await ctx.send(responses.SETUP_PROMPT, view=view)
 
     @voice.group(name="edit", invoke_without_command=True)  # type: ignore
     @commands.has_guild_permissions(administrator=True)
@@ -137,7 +122,7 @@ class VoiceCommandsCog(commands.Cog):
         Group command for editing bot configuration (rename/select channels).
         If no subcommand is given, it prompts the user.
         """
-        await ctx.send("Please specify what you want to edit. Use `.voice edit rename` or `.voice edit select`.")
+        await ctx.send(responses.EDIT_PROMPT)
 
     @edit.command(name="rename")  # type: ignore
     @commands.has_guild_permissions(administrator=True)
@@ -150,14 +135,14 @@ class VoiceCommandsCog(commands.Cog):
         guild = ctx.guild
         if not guild:
             logging.warning(f"Edit rename command invoked outside a guild context by {ctx.author.id}.")
-            return await ctx.send("This command can only be used in a server.", ephemeral=True)
+            return await ctx.send(responses.NOT_IN_GUILD, ephemeral=True)
 
         guild_config = await self._guild_service.get_guild_config(guild.id)
         if guild_config is None:
-            return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
+            return await ctx.send(responses.BOT_NOT_SETUP, ephemeral=True)
 
         view = RenameView(ctx)
-        message = await ctx.send("Press a button to start renaming:", view=view)
+        message = await ctx.send(responses.EDIT_RENAME_PROMPT, view=view)
         view.message = message
 
     @edit.command(name="select")  # type: ignore
@@ -172,30 +157,30 @@ class VoiceCommandsCog(commands.Cog):
         guild = ctx.guild
         if not guild:
             logging.warning(f"Edit select command invoked outside a guild context by {ctx.author.id}.")
-            return await ctx.send("This command can only be used in a server.", ephemeral=True)
+            return await ctx.send(responses.NOT_IN_GUILD, ephemeral=True)
         if not guild.owner_id:
             logging.error(f"Guild {guild.id} has no owner_id, cannot proceed with edit select.")
             return await ctx.send("Could not determine the server owner. Cannot update configuration.", ephemeral=True)
 
         guild_config = await self._guild_service.get_guild_config(guild.id)
         if guild_config is None:
-            return await ctx.send("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
+            return await ctx.send(responses.BOT_NOT_SETUP, ephemeral=True)
 
         active_channels = await self._guild_service.get_voice_channels_by_guild(guild.id)
         temp_channel_ids = {vc.channel_id for vc in active_channels}
 
         voice_channels = [c for c in guild.voice_channels if c.category and c.id not in temp_channel_ids]
         if not voice_channels:
-            await ctx.send("No non-temporary voice channels with categories found to select from.", ephemeral=True)
+            await ctx.send(responses.EDIT_SELECT_NO_CHANNELS, ephemeral=True)
             return
 
         categories = guild.categories
         if not categories:
-            await ctx.send("No categories found to select from.", ephemeral=True)
+            await ctx.send(responses.EDIT_SELECT_NO_CATEGORIES, ephemeral=True)
             return
 
         view = SelectView(ctx, voice_channels, categories)
-        message = await ctx.send("Use the dropdowns to select a new channel or category:", view=view, ephemeral=True)
+        message = await ctx.send(responses.EDIT_SELECT_PROMPT, view=view, ephemeral=True)
         view.message = message
 
     @voice.command(name="list")
@@ -209,15 +194,15 @@ class VoiceCommandsCog(commands.Cog):
         """
         guild = ctx.guild
         if not guild:
-            return await ctx.send("This command can only be used in a server.", ephemeral=True)
+            return await ctx.send(responses.NOT_IN_GUILD, ephemeral=True)
 
         active_channels = await self._guild_service.get_voice_channels_by_guild(guild.id)
 
         if not active_channels:
-            await ctx.send("There are no active temporary channels managed by VoiceMaster in this guild.", ephemeral=True)
+            await ctx.send(responses.LIST_NO_CHANNELS, ephemeral=True)
             return
 
-        embed = discord.Embed(title="Active Temporary Channels", color=discord.Color.green())
+        embed = create_embed(title=responses.LIST_TITLE, color=discord.Color.green())
         description_lines: list[str] = []
 
         for vc in active_channels:
@@ -227,7 +212,7 @@ class VoiceCommandsCog(commands.Cog):
             if channel and owner:
                 description_lines.append(f"**{channel.name}** (<#{channel.id}>) - Owned by {owner.mention}")
             elif channel:
-                description_lines.append(f"**{channel.name}** (<#{channel.id}>) - Owner not found (ID: {vc.owner_id})")
+                description_lines.append(f"**{channel.name}** (<#{channel.id}>) - {responses.LIST_OWNER_NOT_FOUND.format(owner_id=vc.owner_id)}")
 
         embed.description = "\n".join(description_lines) if description_lines else "No active temporary channels found."
         await ctx.send(embed=embed)
@@ -249,12 +234,12 @@ class VoiceCommandsCog(commands.Cog):
         author = cast(discord.Member, ctx.author)
         guild = cast(discord.Guild, ctx.guild)
         if not author.voice or not author.voice.channel:
-            return await ctx.send("Error: Could not determine your voice channel.", ephemeral=True)
+            return await ctx.send(responses.NO_VOICE_CHANNEL, ephemeral=True)
 
         voice_channel_obj = cast(discord.VoiceChannel, author.voice.channel)
 
         await voice_channel_obj.set_permissions(guild.default_role, connect=False)
-        await ctx.send("🔒 Channel locked.", ephemeral=True)
+        await ctx.send(responses.CHANNEL_LOCKED, ephemeral=True)
 
     @voice.command(name="unlock")
     @commands.guild_only()
@@ -273,12 +258,12 @@ class VoiceCommandsCog(commands.Cog):
         author = cast(discord.Member, ctx.author)
         guild = cast(discord.Guild, ctx.guild)
         if not author.voice or not author.voice.channel:
-            return await ctx.send("Error: Could not determine your voice channel.", ephemeral=True)
+            return await ctx.send(responses.NO_VOICE_CHANNEL, ephemeral=True)
 
         voice_channel_obj = cast(discord.VoiceChannel, author.voice.channel)
 
         await voice_channel_obj.set_permissions(guild.default_role, connect=True)
-        await ctx.send("🔓 Channel unlocked.", ephemeral=True)
+        await ctx.send(responses.CHANNEL_UNLOCKED, ephemeral=True)
 
     @voice.command(name="permit")
     @commands.guild_only()
@@ -299,12 +284,12 @@ class VoiceCommandsCog(commands.Cog):
         """
         author = cast(discord.Member, ctx.author)
         if not author.voice or not author.voice.channel:
-            return await ctx.send("Error: Could not determine your voice channel.", ephemeral=True)
+            return await ctx.send(responses.NO_VOICE_CHANNEL, ephemeral=True)
 
         voice_channel_obj = cast(discord.VoiceChannel, author.voice.channel)
 
         await voice_channel_obj.set_permissions(member, connect=True)
-        await ctx.send(f"✅ {member.mention} can now join your channel.", ephemeral=True)
+        await ctx.send(responses.PERMIT_SUCCESS.format(member_mention=member.mention), ephemeral=True)
 
     @voice.command(name="claim")
     @commands.guild_only()
@@ -325,25 +310,25 @@ class VoiceCommandsCog(commands.Cog):
         voice_state = author.voice
 
         if not voice_state or not voice_state.channel:
-            return await ctx.send("Error: Could not determine your voice channel.", ephemeral=True)
+            return await ctx.send(responses.NO_VOICE_CHANNEL, ephemeral=True)
 
         channel = cast(discord.VoiceChannel, voice_state.channel)
 
         vc = await self._voice_channel_service.get_voice_channel(channel.id)
         if vc is None:
-            return await ctx.send("This channel is not a temporary channel managed by VoiceMaster.", ephemeral=True)
+            return await ctx.send(responses.CLAIM_NOT_TEMP_CHANNEL, ephemeral=True)
 
         assert isinstance(vc.owner_id, int)
         owner = guild.get_member(vc.owner_id)
 
         if owner and owner in channel.members:
-            return await ctx.send(f"The owner, {owner.mention}, is still in the channel. You cannot claim it.", ephemeral=True)
+            return await ctx.send(responses.CLAIM_OWNER_PRESENT.format(owner_mention=owner.mention), ephemeral=True)
 
         await self._voice_channel_service.update_voice_channel_owner(channel.id, author.id)
 
         await channel.set_permissions(author, manage_channels=True, manage_roles=True)
 
-        await ctx.send(f"👑 {author.mention}, you are now the owner of this channel!", ephemeral=True)
+        await ctx.send(responses.CLAIM_SUCCESS.format(author_mention=author.mention), ephemeral=True)
 
     @voice.command(name="name")
     @commands.guild_only()
@@ -362,7 +347,7 @@ class VoiceCommandsCog(commands.Cog):
         """
 
         if not (2 <= len(new_name) <= 100):
-            return await ctx.send("Please provide a name between 2 and 100 characters.", ephemeral=True)
+            return await ctx.send(responses.NAME_LENGTH_ERROR, ephemeral=True)
 
         author = cast(discord.Member, ctx.author)
         guild = cast(discord.Guild, ctx.guild)
@@ -393,7 +378,7 @@ class VoiceCommandsCog(commands.Cog):
             )
 
         await ctx.send(
-            f"Your channel name has been set to **{new_name}**. It will apply to your current (if you own one and are in it) and all future channels.",
+            responses.NAME_SUCCESS.format(new_name=new_name),
             ephemeral=True,
         )
 
@@ -416,7 +401,7 @@ class VoiceCommandsCog(commands.Cog):
         guild = cast(discord.Guild, ctx.guild)
 
         if not (0 <= new_limit <= 99):
-            return await ctx.send("Please provide a limit between 0 (unlimited) and 99.", ephemeral=True)
+            return await ctx.send(responses.LIMIT_RANGE_ERROR, ephemeral=True)
 
         await self._voice_channel_service.update_user_channel_limit(author.id, new_limit)
 
@@ -445,7 +430,7 @@ class VoiceCommandsCog(commands.Cog):
 
         limit_str = f"{new_limit if new_limit > 0 else 'unlimited'}"
         await ctx.send(
-            f"Your channel limit has been set to **{limit_str}**. It will apply to your current (if you own one and are in it) and all future channels.",
+            responses.LIMIT_SUCCESS.format(limit_str=limit_str),
             ephemeral=True,
         )
 
@@ -462,21 +447,21 @@ class VoiceCommandsCog(commands.Cog):
         """
         guild = ctx.guild
         if not guild:
-            return await ctx.send("This command can only be used in a server.", ephemeral=True)
+            return await ctx.send(responses.NOT_IN_GUILD, ephemeral=True)
 
         if not (1 <= count <= 50):
-            return await ctx.send("Please provide a count between 1 and 50.", ephemeral=True)
+            return await ctx.send(responses.AUDIT_LOG_COUNT_ERROR, ephemeral=True)
 
         logs = await self._audit_log_service.get_latest_logs(guild.id, count)
 
         if not logs:
-            return await ctx.send("No audit log entries found for this guild.", ephemeral=True)
+            return await ctx.send(responses.AUDIT_LOG_NO_ENTRIES, ephemeral=True)
 
-        embed = discord.Embed(
-            title=f"Recent VoiceMaster Activity Logs ({len(logs)} entries)",
+        embed = create_embed(
+            title=responses.AUDIT_LOG_TITLE.format(count=len(logs)),
             color=discord.Color.orange(),
+            footer=responses.AUDIT_LOG_FOOTER,
         )
-        embed.set_footer(text="Most recent entries first. Times are UTC.")
 
         for entry in logs:
             user_id_val: Optional[int] = cast(Optional[int], entry.user_id)
@@ -489,7 +474,7 @@ class VoiceCommandsCog(commands.Cog):
                 if fetched_user:
                     user_display = fetched_user.mention
                 else:
-                    user_display = f"User ID: {user_id_val} (Not found)"
+                    user_display = responses.AUDIT_LOG_USER_NOT_FOUND.format(user_id=user_id_val)
 
             channel_display: str = "N/A"
             if channel_id_val is not None:
@@ -501,23 +486,23 @@ class VoiceCommandsCog(commands.Cog):
                     ):
                         channel_display = fetched_channel.mention
                     elif isinstance(fetched_channel, discord.DMChannel):
-                        channel_display = f"DM Channel ({fetched_channel.id})"
+                        channel_display = responses.AUDIT_LOG_DM_CHANNEL.format(channel_id=channel_id_val)
                     else:
                         channel_name_attr = getattr(fetched_channel, "name", f"Unknown Channel Type (ID: {channel_id_val})")
-                        channel_display = f"Channel '{channel_name_attr}' (ID: {channel_id_val})"
+                        channel_display = responses.AUDIT_LOG_UNKNOWN_CHANNEL.format(channel_name=channel_name_attr, channel_id=channel_id_val)
                 else:
-                    channel_display = f"Channel ID: {channel_id_val} (Not found)"
+                    channel_display = responses.AUDIT_LOG_CHANNEL_NOT_FOUND.format(channel_id=channel_id_val)
 
             timestamp_str = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-            field_value = (
-                f"**Type**: {entry.event_type.replace('_', ' ').title()}\n"
-                f"**User**: {user_display}\n"
-                f"**Channel**: {channel_display}\n"
-                f"**Details**: {details_val if details_val is not None else 'N/A'}\n"
-                f"**Time**: {timestamp_str}"
+            field_value = responses.AUDIT_LOG_FIELD_VALUE.format(
+                event_type=entry.event_type.replace('_', ' ').title(),
+                user_display=user_display,
+                channel_display=channel_display,
+                details=details_val if details_val is not None else 'N/A',
+                timestamp=timestamp_str,
             )
-            embed.add_field(name=f"Log Entry #{entry.id}", value=field_value, inline=False)
+            embed.add_field(name=responses.AUDIT_LOG_FIELD_TITLE.format(entry_id=entry.id), value=field_value, inline=False)
 
         await ctx.send(embed=embed, ephemeral=True)
 

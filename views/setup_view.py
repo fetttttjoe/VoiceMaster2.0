@@ -6,6 +6,7 @@ import discord
 from discord import ui
 from discord.ext.commands import Context
 
+from config import settings
 from database.models import AuditLogEventType
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
@@ -59,7 +60,7 @@ class SetupModal(ui.Modal, title="VoiceMaster Setup"):
 
 class SetupView(AuthorOnlyView):
     def __init__(self, ctx: Context):
-        super().__init__(ctx)
+        super().__init__(ctx, timeout=settings.VIEW_TIMEOUT)
         self.bot = cast(VoiceMasterBot, ctx.bot)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
@@ -69,3 +70,4 @@ class SetupView(AuthorOnlyView):
         modal = SetupModal(self.bot, self.guild_service, self.audit_log_service)
         await interaction.response.send_modal(modal)
         self.stop()
+        await self.disable_components()

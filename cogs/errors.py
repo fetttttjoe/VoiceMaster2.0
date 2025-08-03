@@ -3,6 +3,7 @@ import logging
 import discord
 from discord.ext import commands
 
+from utils import responses
 from utils.checks import VoiceChannelCheckError
 
 
@@ -45,7 +46,7 @@ class ErrorHandlerCog(commands.Cog):
 
         if isinstance(original_error, VoiceChannelCheckError):
             return await ctx.send(
-                f"⚠️ {original_error}",
+                f"{responses.ERROR_PREFIX} {original_error}",
                 ephemeral=True,
                 delete_after=10,
             )
@@ -55,33 +56,33 @@ class ErrorHandlerCog(commands.Cog):
         elif isinstance(original_error, commands.MissingPermissions):
             missing_perms = ", ".join(original_error.missing_permissions).replace("_", " ").title()
             return await ctx.send(
-                f"🚫 You don't have the required permissions (`{missing_perms}`) to use this command.",
+                responses.MISSING_PERMISSIONS.format(perms=missing_perms),
                 ephemeral=True,
                 delete_after=10,
             )
         elif isinstance(original_error, commands.NoPrivateMessage):
             return await ctx.send(
-                "This command cannot be used in private messages.",
+                responses.NO_PRIVATE_MESSAGE,
                 ephemeral=True,
                 delete_after=10,
             )
         elif isinstance(original_error, commands.UserInputError):
             return await ctx.send(
-                f"🤔 Invalid input: {original_error}. Please check your arguments.",
+                responses.USER_INPUT_ERROR.format(error=original_error),
                 ephemeral=True,
                 delete_after=10,
             )
         elif isinstance(original_error, commands.CheckFailure):
-            return await ctx.send("You do not meet the requirements to run this command.", ephemeral=True, delete_after=10)
+            return await ctx.send(responses.CHECK_FAILURE, ephemeral=True, delete_after=10)
         elif isinstance(original_error, discord.Forbidden):
             return await ctx.send(
-                "🚫 I don't have the required permissions to perform this action. Please check my role and channel permissions.",
+                responses.FORBIDDEN_ERROR,
                 ephemeral=True,
                 delete_after=10,
             )
         elif isinstance(original_error, discord.HTTPException):
             return await ctx.send(
-                "An error occurred while communicating with Discord. Please try again later.",
+                responses.HTTP_EXCEPTION,
                 ephemeral=True,
                 delete_after=10,
             )
@@ -93,7 +94,7 @@ class ErrorHandlerCog(commands.Cog):
         )
 
         await ctx.send(
-            "An unexpected error occurred. This has been logged for review. Please try again later.",
+            responses.UNHANDLED_EXCEPTION,
             ephemeral=True,
             delete_after=10,
         )

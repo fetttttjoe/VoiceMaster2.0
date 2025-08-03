@@ -8,6 +8,7 @@ from discord import ui
 from discord.ext.commands import Context
 from discord.interactions import Interaction
 
+from config import settings
 from database.models import AuditLogEventType, Guild
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
@@ -76,7 +77,7 @@ class RenameView(AuthorOnlyView):
     """
 
     def __init__(self, ctx: Context):
-        super().__init__(ctx, timeout=180.0)
+        super().__init__(ctx, timeout=settings.VIEW_TIMEOUT)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
 
@@ -141,7 +142,7 @@ class SelectView(AuthorOnlyView):
     """
 
     def __init__(self, ctx: Context, voice_channels: list, categories: list):
-        super().__init__(ctx, timeout=180.0)
+        super().__init__(ctx, timeout=settings.VIEW_TIMEOUT)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
 
