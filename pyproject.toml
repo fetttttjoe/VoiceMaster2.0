@@ -25,6 +25,7 @@ dev = [
     "pytest-cov==6.2.1",
     "ruff==0.12.7",
     "mypy==1.17.1",
+    "aiosqlite==0.20.0",
 ]
 
 [tool.ruff.lint]

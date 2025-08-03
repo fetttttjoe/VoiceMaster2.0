@@ -1,20 +1,24 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    DISCORD_TOKEN: str
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_HOST: str
-    POSTGRES_PORT: int
-    POSTGRES_DB: str
+    DISCORD_TOKEN: str = "your_super_secret_bot_token"
+    POSTGRES_USER: str = "voicemaster"
+    POSTGRES_PASSWORD: str = "your_secure_password"
+    POSTGRES_HOST: str = "db"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "voicemaster_db"
     DB_ECHO: bool = False
+    DATABASE_URL: str = ""
 
-    @property
-    def DATABASE_URL(self) -> str:
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    @model_validator(mode='before')
+    def assemble_db_connection(cls, v):
+        if 'DATABASE_URL' not in v:
+            v['DATABASE_URL'] = f"postgresql+asyncpg://{v.get('POSTGRES_USER')}:{v.get('POSTGRES_PASSWORD')}@{v.get('POSTGRES_HOST')}:{v.get('POSTGRES_PORT')}/{v.get('POSTGRES_DB')}"
+        return v
 
 
-settings = Settings()  # type: ignore
+settings = Settings()

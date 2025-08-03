@@ -1,25 +1,38 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from database.models import VoiceChannel
+from database.models import UserSettings, VoiceChannel
 
 
 class IVoiceChannelRepository(ABC):
-    """
-    Abstract interface for voice channel data operations.
-    """
+    @abstractmethod
+    async def get_voice_channel_by_owner(self, owner_id: int) -> Optional[VoiceChannel]:
+        ...
 
     @abstractmethod
-    async def get_by_owner(self, owner_id: int) -> Optional[VoiceChannel]: ...
+    async def get_voice_channel(self, channel_id: int) -> Optional[VoiceChannel]:
+        ...
 
     @abstractmethod
-    async def get_by_channel_id(self, channel_id: int) -> Optional[VoiceChannel]: ...
+    async def delete_voice_channel(self, channel_id: int) -> None:
+        ...
 
     @abstractmethod
-    async def create(self, channel_id: int, owner_id: int, guild_id: int) -> None: ...
+    async def create_voice_channel(self, channel_id: int, owner_id: int, guild_id: int) -> None:
+        ...
 
     @abstractmethod
-    async def delete(self, channel_id: int) -> None: ...
+    async def update_voice_channel_owner(self, channel_id: int, new_owner_id: int) -> None:
+        ...
 
     @abstractmethod
-    async def update_owner(self, channel_id: int, new_owner_id: int) -> None: ...
+    async def get_user_settings(self, user_id: int) -> Optional[UserSettings]:
+        ...
+
+    @abstractmethod
+    async def update_user_channel_name(self, user_id: int, name: str) -> None:
+        ...
+
+    @abstractmethod
+    async def update_user_channel_limit(self, user_id: int, limit: int) -> None:
+        ...
