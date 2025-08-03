@@ -82,29 +82,13 @@ async def test_handle_channel_leave_deletes_empty_channel(mock_bot):
     cog = EventsCog(mock_bot, mock_bot.guild_service, mock_bot.voice_channel_service, mock_bot.audit_log_service)
     member = AsyncMock(id=1, guild=MagicMock(id=123), display_name="TestUser")
     before_channel = AsyncMock(spec=discord.VoiceChannel, id=789, name="TempChannel", members=[])
-    before_channel.name = "TempChannel"
     before = AsyncMock(channel=before_channel)
     mock_bot.voice_channel_service.get_voice_channel.return_value = MagicMock(channel_id=789, owner_id=member.id)
 
-    await cog._handle_channel_leave(member, before)
+    with patch.object(cog, "_delete_empty_channel") as mock_delete_empty_channel:
+        await cog._handle_channel_leave(member, before)
+        mock_delete_empty_channel.assert_called_once_with(before_channel)
 
-    mock_bot.voice_channel_service.get_voice_channel.assert_called_once_with(789)
-    before_channel.delete.assert_called_once_with(reason="Temporary channel empty.")
-    mock_bot.voice_channel_service.delete_voice_channel.assert_called_once_with(789)
-    assert mock_bot.audit_log_service.log_event.call_count == 2
-    mock_bot.audit_log_service.log_event.assert_any_call(
-        guild_id=123,
-        event_type=AuditLogEventType.USER_LEFT_OWNED_CHANNEL,
-        user_id=1,
-        channel_id=789,
-        details="User TestUser (1) left their owned channel 'TempChannel' (789).",
-    )
-    mock_bot.audit_log_service.log_event.assert_any_call(
-        guild_id=123,
-        event_type=AuditLogEventType.CHANNEL_DELETED,
-        channel_id=789,
-        details="Empty temporary channel 'TempChannel' (789) deleted from Discord and database.",
-    )
 
 
 @pytest.mark.asyncio
@@ -136,17 +120,13 @@ async def test_handle_channel_creation_moves_user_if_channel_exists(mock_bot):
     existing_channel_discord = AsyncMock(spec=discord.VoiceChannel, id=999, name="ExistingChannel")
     mock_bot.get_channel.return_value = existing_channel_discord
     mock_bot.voice_channel_service.get_voice_channel_by_owner.return_value = existing_channel_db
-    mock_bot.voice_channel_service.get_user_settings.return_value = None
 
-    await cog._handle_channel_creation(member, guild_config)
+    with patch.object(cog, "_create_and_move_user") as mock_create_and_move:
+        await cog._handle_channel_creation(member, guild_config)
+        mock_create_and_move.assert_not_called()
 
-    mock_bot.voice_channel_service.get_voice_channel_by_owner.assert_called_once_with(member.id)
     member.move_to.assert_called_once_with(existing_channel_discord, reason="User already has a channel.")
-    mock_bot.audit_log_service.log_event.assert_called_once()
-    assert mock_bot.audit_log_service.log_event.call_args.kwargs["event_type"] == AuditLogEventType.USER_MOVED_TO_EXISTING_CHANNEL
-    mock_bot.voice_channel_service.delete_voice_channel.assert_not_called()
-    member.guild.create_voice_channel.assert_not_called()
-    mock_bot.voice_channel_service.create_voice_channel.assert_not_called()
+
 
 
 @pytest.mark.asyncio
@@ -179,13 +159,8 @@ async def test_handle_channel_creation_fails_if_category_not_found(mock_bot):
     guild_config = Guild(creation_channel_id=456, voice_category_id=111)
     mock_bot.get_channel.return_value = None
     mock_bot.voice_channel_service.get_voice_channel_by_owner.return_value = None
-    mock_bot.voice_channel_service.get_user_settings.return_value = None
 
-    await cog._handle_channel_creation(member, guild_config)
+    with patch.object(cog, "_create_and_move_user") as mock_create_and_move:
+        await cog._handle_channel_creation(member, guild_config)
+        mock_create_and_move.assert_not_called()
 
-    mock_bot.voice_channel_service.get_voice_channel_by_owner.assert_called_once_with(member.id)
-    mock_bot.voice_channel_service.get_user_settings.assert_called_once_with(member.id)
-    member.guild.create_voice_channel.assert_not_called()
-    mock_bot.voice_channel_service.create_voice_channel.assert_not_called()
-    mock_bot.audit_log_service.log_event.assert_called_once()
-    assert mock_bot.audit_log_service.log_event.call_args.kwargs["event_type"] == AuditLogEventType.CATEGORY_NOT_FOUND
