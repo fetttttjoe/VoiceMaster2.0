@@ -57,7 +57,12 @@ class EventsCog(commands.Cog):
         """
         logging.info(f"{self._bot.user} has connected to Discord!")
         logging.info("Running startup channel cleanup...")
+        await self._cleanup_stale_channels_on_startup()
 
+    async def _cleanup_stale_channels_on_startup(self):
+        """
+        Cleans up stale temporary voice channels on bot startup.
+        """
         for guild in self._bot.guilds:
             guild_config = await self._guild_service.get_guild_config(guild.id)
             if not guild_config or is_db_value_equal(guild_config.cleanup_on_startup, False):
@@ -97,78 +102,48 @@ class EventsCog(commands.Cog):
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
         """
         Routes voice state updates to appropriate handlers based on channel changes.
-
-        This listener is triggered whenever a member's voice state changes,
-        e.g., joining, leaving, muting, deafening, etc. It specifically checks
-        for channel changes to manage temporary voice channels.
-
-        Args:
-            member: The `discord.Member` whose voice state changed.
-            before: The `discord.VoiceState` before the change.
-            after: The `discord.VoiceState` after the change.
         """
-        # Ignore bot users to prevent self-triggering loops or unwanted actions.
         if member.bot:
-            logging.info(f"DEBUG: Ignoring bot user {member.id}")
             return
 
-        # Ensure the member is in a guild context.
         if not member.guild:
-            logging.warning(f"Voice state update for member {member.id} not in a guild.")
             return
 
-        logging.info(f"DEBUG: Voice state update for user {member.id} in guild {member.guild.id}")
-        logging.info(f"DEBUG: Before channel: {before.channel.id if before.channel else 'None'}")
-        logging.info(f"DEBUG: After channel: {after.channel.id if after.channel else 'None'}")
-
-        # Retrieve the guild configuration to identify the creation channel.
         guild_config = await self._guild_service.get_guild_config(member.guild.id)
-        logging.info(f"DEBUG: Guild config retrieved: {guild_config.creation_channel_id if guild_config else 'None'}")
-
-        # If no guild configuration exists or the creation channel ID is invalid,
-        # the bot is not set up for this guild, so we ignore the event.
         if not guild_config or not isinstance(guild_config.creation_channel_id, int):
-            logging.info(f"DEBUG: Ignoring voice state update in guild {member.guild.id}: Bot not configured or invalid creation channel ID.")
             return
 
-        # At this point, guild_config is not None, and guild_config.creation_channel_id is an int.
-        # We can safely cast it to help Pylance.
-        creation_channel_id = cast(int, guild_config.creation_channel_id)
-        logging.info(f"DEBUG: Creation channel ID: {creation_channel_id}")
+        before_channel_id = before.channel.id if before.channel else None
+        after_channel_id = after.channel.id if after.channel else None
 
-        # --- Handle User Leaving a Voice Channel ---
-        # Check if the user was in a channel BEFORE this update and is now in a different one or none.
-        # We also ensure it's not the creation channel, as leaving that has a different flow.
-        # Added type guard for Pylance
-        if before.channel and isinstance(before.channel, discord.VoiceChannel):
-            # Cast before.channel to discord.VoiceChannel after the check to reassure Pylance.
-            channel_before = cast(discord.VoiceChannel, before.channel)
-            logging.info(f"DEBUG: User left channel {channel_before.id}. Comparing with creation channel {{creation_channel_id}}.")
-            if not is_db_value_equal(channel_before.id, creation_channel_id):
-                logging.info(f"DEBUG: Calling _handle_channel_leave for channel {channel_before.id}")
-                await self._handle_channel_leave(member, before)
+        if before_channel_id != after_channel_id:
+            if before.channel:
+                await self._handle_user_leave(member, before, guild_config)
+            if after.channel:
+                await self._handle_user_join(member, after, guild_config)
+
+    async def _handle_user_leave(self, member: discord.Member, before: discord.VoiceState, guild_config: Guild):
+        """
+        Handles the logic for when a user leaves a voice channel.
+        """
+        if before.channel and before.channel.id != guild_config.creation_channel_id:
+            await self._handle_channel_leave(member, before)
+
+    async def _handle_user_join(self, member: discord.Member, after: discord.VoiceState, guild_config: Guild):
+        """
+        Handles the logic for when a user joins a voice channel.
+        """
+        if after.channel and after.channel.id == guild_config.creation_channel_id:
+            if member.id not in self._user_locks:
+                if len(self._user_locks) >= self.MAX_LOCKS:
+                    self._user_locks.popitem(last=False)
+                self._user_locks[member.id] = asyncio.Lock()
             else:
-                logging.info("DEBUG: User left creation channel. Not calling _handle_channel_leave.")
+                self._user_locks.move_to_end(member.id)
 
-        # --- Handle User Joining the "Create" Channel ---
-        # Check if the user is now in a channel AFTER this update and that channel is the creation channel.
-        # Added type guard for Pylance
-        if after.channel and isinstance(after.channel, discord.VoiceChannel):
-            logging.info(f"DEBUG: User joined channel {after.channel.id}. Comparing with creation channel {{creation_channel_id}}.")
-            if is_db_value_equal(after.channel.id, creation_channel_id):
-                logging.info(f"DEBUG: Calling _handle_channel_creation for channel {after.channel.id}")
-                if member.id not in self._user_locks:
-                    if len(self._user_locks) >= self.MAX_LOCKS:
-                        self._user_locks.popitem(last=False)
-                    self._user_locks[member.id] = asyncio.Lock()
-                else:
-                    self._user_locks.move_to_end(member.id)
-
-                lock = self._user_locks[member.id]
-                async with lock:
-                    await self._handle_channel_creation(member, guild_config)
-            else:
-                logging.info("DEBUG: User joined non-creation channel. Not calling _handle_channel_creation.")
+            lock = self._user_locks[member.id]
+            async with lock:
+                await self._handle_channel_creation(member, guild_config)
 
     async def _handle_channel_leave(self, member: discord.Member, before: discord.VoiceState):
         """

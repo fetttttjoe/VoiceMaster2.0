@@ -478,3 +478,225 @@ async def test_list_command(mock_get_session, mock_bot, mock_ctx):
     # Assert on the *injected* mock_audit_log_service
     mock_audit_log_service.log_event.assert_called_once()
     assert mock_audit_log_service.log_event.call_args.kwargs["event_type"] == AuditLogEventType.LIST_CHANNELS
+
+@pytest.mark.asyncio
+async def test_config_command_no_config(mock_bot, mock_ctx):
+    """Tests that the config command sends an error message if the bot is not set up."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_guild_service.get_guild_config.return_value = None
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    config_command = voice_command.get_command("config")
+    assert config_command is not None
+
+    callback = cast(Callable[..., Any], config_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        f"The bot has not been set up yet. Run `{mock_ctx.prefix}voice setup` first.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_edit_rename_command_no_config(mock_bot, mock_ctx):
+    """Tests that the edit_rename command sends an error message if the bot is not set up."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_guild_service.get_guild_config.return_value = None
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    edit_command = voice_command.get_command("edit")
+    assert edit_command is not None and isinstance(edit_command, commands.Group)
+    rename_command = edit_command.get_command("rename")
+    assert rename_command is not None
+
+    callback = cast(Callable[..., Any], rename_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_edit_select_command_no_config(mock_bot, mock_ctx):
+    """Tests that the edit_select command sends an error message if the bot is not set up."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_guild_service.get_guild_config.return_value = None
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    edit_command = voice_command.get_command("edit")
+    assert edit_command is not None and isinstance(edit_command, commands.Group)
+    select_command = edit_command.get_command("select")
+    assert select_command is not None
+
+    callback = cast(Callable[..., Any], select_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_edit_select_command_no_voice_channels(mock_bot, mock_ctx):
+    """Tests that the edit_select command sends an error message if there are no voice channels."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_guild_service.get_guild_config.return_value = MagicMock()
+    mock_ctx.guild.voice_channels = []
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    edit_command = voice_command.get_command("edit")
+    assert edit_command is not None and isinstance(edit_command, commands.Group)
+    select_command = edit_command.get_command("select")
+    assert select_command is not None
+
+    callback = cast(Callable[..., Any], select_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "No non-temporary voice channels with categories found to select from.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_edit_select_command_no_categories(mock_bot, mock_ctx):
+    """Tests that the edit_select command sends an error message if there are no categories."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_guild_service.get_guild_config.return_value = MagicMock()
+    mock_ctx.guild.voice_channels = [MagicMock(spec=discord.VoiceChannel, category=MagicMock())]
+    mock_ctx.guild.categories = []
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    edit_command = voice_command.get_command("edit")
+    assert edit_command is not None and isinstance(edit_command, commands.Group)
+    select_command = edit_command.get_command("select")
+    assert select_command is not None
+
+    callback = cast(Callable[..., Any], select_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "No categories found to select from.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_list_channels_no_channels(mock_bot, mock_ctx):
+    """Tests that the list command sends a message when there are no active channels."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_guild_service.get_voice_channels_by_guild.return_value = []
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    list_channels_command = voice_command.get_command("list")
+    assert list_channels_command is not None
+
+    callback = cast(Callable[..., Any], list_channels_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "There are no active temporary channels managed by VoiceMaster in this guild.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_claim_command_not_temp_channel(mock_bot, mock_ctx, mock_member):
+    """Tests that the claim command sends an error message if the channel is not a temporary channel."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_voice_channel_service.get_voice_channel.return_value = None
+    mock_ctx.author = mock_member
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    claim_command = voice_command.get_command("claim")
+    assert claim_command is not None
+
+    callback = cast(Callable[..., Any], claim_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "This channel is not a temporary channel managed by VoiceMaster.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["a", "a" * 101])
+async def test_name_command_invalid_length(mock_bot, mock_ctx, name):
+    """Tests that the name command sends an error message if the name is too short or too long."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    name_command = voice_command.get_command("name")
+    assert name_command is not None
+
+    callback = cast(Callable[..., Any], name_command.callback)
+    await callback(cog, mock_ctx, new_name=name)
+
+    mock_ctx.send.assert_called_once_with(
+        "Please provide a name between 2 and 100 characters.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [-1, 100])
+async def test_limit_command_invalid_limit(mock_bot, mock_ctx, limit):
+    """Tests that the limit command sends an error message if the limit is out of range."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    limit_command = voice_command.get_command("limit")
+    assert limit_command is not None
+
+    callback = cast(Callable[..., Any], limit_command.callback)
+    await callback(cog, mock_ctx, new_limit=limit)
+
+    mock_ctx.send.assert_called_once_with(
+        "Please provide a limit between 0 (unlimited) and 99.", ephemeral=True
+    )
+
+@pytest.mark.asyncio
+async def test_auditlog_command_no_logs(mock_bot, mock_ctx):
+    """Tests that the auditlog command sends a message when there are no logs."""
+    mock_guild_service = AsyncMock(spec=IGuildService)
+    mock_voice_channel_service = AsyncMock(spec=IVoiceChannelService)
+    mock_audit_log_service = AsyncMock(spec=IAuditLogService)
+    mock_audit_log_service.get_latest_logs.return_value = []
+
+    cog = VoiceCommandsCog(mock_bot, mock_guild_service, mock_voice_channel_service, mock_audit_log_service)
+    voice_command = next((cmd for cmd in cog.get_commands() if cmd.name == "voice"), None)
+    assert voice_command is not None and isinstance(voice_command, commands.Group)
+    auditlog_command = voice_command.get_command("auditlog")
+    assert auditlog_command is not None
+
+    callback = cast(Callable[..., Any], auditlog_command.callback)
+    await callback(cog, mock_ctx)
+
+    mock_ctx.send.assert_called_once_with(
+        "No audit log entries found for this guild.", ephemeral=True
+    )

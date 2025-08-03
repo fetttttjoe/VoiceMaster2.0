@@ -1,3 +1,4 @@
+import runpy
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
@@ -63,3 +64,13 @@ async def test_main_function_critical_log_on_no_token(
 
     assert "DISCORD_TOKEN is not set" in caplog.text
     mock_bot.assert_not_called()
+
+
+@patch("main.main")
+def test_main_entrypoint(mock_main: MagicMock):
+    """
+    Tests that the main function is called when the script is executed.
+    """
+    with patch.object(runpy, "run_path") as mock_run_path:
+        runpy.run_path("main.py", run_name="__main__")
+        mock_run_path.assert_called_once_with("main.py", run_name="__main__")

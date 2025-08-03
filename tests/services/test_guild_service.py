@@ -1,42 +1,39 @@
-from unittest.mock import AsyncMock, call
+from unittest.mock import call
 
 import pytest
 
-from database import crud
 from services.guild_service import GuildService
 
 
 @pytest.mark.asyncio
-async def test_get_guild_config(mock_db_session, mock_voice_channel_service, mock_bot):
+async def test_get_guild_config(mock_guild_repository, mock_voice_channel_service, mock_bot):
     """
-    Tests that get_guild_config calls get_guild on its repository.
+    Tests that get_guild_config calls get_guild_config on its repository.
     """
-    guild_service = GuildService(mock_db_session, mock_voice_channel_service, mock_bot)
-    crud.get_guild = AsyncMock()
+    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
     await guild_service.get_guild_config(123)
-    crud.get_guild.assert_called_once_with(mock_db_session, 123)
+    mock_guild_repository.get_guild_config.assert_called_once_with(123)
 
 
 @pytest.mark.asyncio
-async def test_create_or_update_guild(mock_db_session, mock_voice_channel_service, mock_bot):
+async def test_create_or_update_guild(mock_guild_repository, mock_voice_channel_service, mock_bot):
     """
     Tests that create_or_update_guild calls create_or_update_guild on its repository.
     """
-    guild_service = GuildService(mock_db_session, mock_voice_channel_service, mock_bot)
-    crud.create_or_update_guild = AsyncMock()
+    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
     await guild_service.create_or_update_guild(1, 2, 3, 4)
-    crud.create_or_update_guild.assert_called_once_with(mock_db_session, 1, 2, 3, 4)
+    mock_guild_repository.create_or_update_guild.assert_called_once_with(1, 2, 3, 4)
 
 
 @pytest.mark.asyncio
-async def test_cleanup_stale_channels(mock_db_session, mock_voice_channel_service, mock_bot):
+async def test_cleanup_stale_channels(mock_guild_repository, mock_voice_channel_service, mock_bot):
     """
     Tests that cleanup_stale_channels correctly calls the voice channel service
     to delete each provided channel ID from the database.
     """
     # Arrange
     channel_ids_to_delete = [10, 20, 30]
-    guild_service = GuildService(mock_db_session, mock_voice_channel_service, mock_bot)
+    guild_service = GuildService(mock_guild_repository, mock_voice_channel_service, mock_bot)
 
     # Act
     await guild_service.cleanup_stale_channels(channel_ids_to_delete)

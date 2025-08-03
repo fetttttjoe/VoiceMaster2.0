@@ -8,9 +8,30 @@ from discord.ext import commands
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from interfaces.audit_log_repository import IAuditLogRepository
+from interfaces.guild_repository import IGuildRepository
 from interfaces.guild_service import IGuildService
+from interfaces.voice_channel_repository import IVoiceChannelRepository
 from interfaces.voice_channel_service import IVoiceChannelService
 from services.audit_log_service import AuditLogService
+
+
+@pytest.fixture
+def mock_guild_repository():
+    """Fixture for a mocked GuildRepository instance."""
+    return AsyncMock(spec=IGuildRepository)
+
+
+@pytest.fixture
+def mock_voice_channel_repository():
+    """Fixture for a mocked VoiceChannelRepository instance."""
+    return AsyncMock(spec=IVoiceChannelRepository)
+
+
+@pytest.fixture
+def mock_audit_log_repository():
+    """Fixture for a mocked AuditLogRepository instance."""
+    return AsyncMock(spec=IAuditLogRepository)
 
 
 @pytest.fixture
@@ -82,4 +103,6 @@ def mock_ctx(mock_guild, mock_member, mock_bot):
 @pytest.fixture
 def mock_db_session():
     """Fixture for a mocked database session."""
-    return AsyncMock()
+    session = AsyncMock()
+    session.add = MagicMock()
+    return session
