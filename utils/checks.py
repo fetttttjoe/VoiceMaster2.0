@@ -1,13 +1,15 @@
 # VoiceMaster2.0/utils/checks.py
-from typing import cast  # Used for explicit type casting to help Pylance/type checkers
+from typing import TYPE_CHECKING, cast
 
 import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
-from interfaces.voice_channel_service import IVoiceChannelService  # Import the service interface for type hinting
-from main import VoiceMasterBot  # Import the custom bot class for type hinting
-from utils.db_helpers import is_db_value_equal  # Custom helper for safe database value comparison
+from interfaces.voice_channel_service import IVoiceChannelService
+from utils.db_helpers import is_db_value_equal
+
+if TYPE_CHECKING:
+    from bot_instance import VoiceMasterBot
 
 # --- Custom Exception Classes for Command Checks ---
 
@@ -81,7 +83,7 @@ def is_channel_owner():
 
         # Safely cast ctx.bot to our custom VoiceMasterBot class
         # to access its attached services through type hints.
-        bot = cast(VoiceMasterBot, ctx.bot)
+        bot = cast("VoiceMasterBot", ctx.bot)
         # Retrieve the voice channel service instance from the bot.
         vc_service: IVoiceChannelService = bot.voice_channel_service
 

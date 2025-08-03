@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 import discord
 from discord import ui
@@ -10,7 +10,6 @@ from database.models import AuditLogEventType
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
-from main import VoiceMasterBot
 from services.audit_decorator import audit_log
 from utils import responses
 from utils.checks import is_channel_owner, is_in_voice_channel
@@ -18,6 +17,9 @@ from utils.db_helpers import is_db_value_equal
 from utils.embed_helpers import create_embed
 from views.setup_view import SetupView
 from views.voice_commands_views import ConfigView, RenameView, SelectView
+
+if TYPE_CHECKING:
+    from bot_instance import VoiceMasterBot
 
 
 class VoiceCommandsCog(commands.Cog):
@@ -27,7 +29,7 @@ class VoiceCommandsCog(commands.Cog):
 
     def __init__(
         self,
-        bot: VoiceMasterBot,
+        bot: "VoiceMasterBot",
         guild_service: IGuildService,
         voice_channel_service: IVoiceChannelService,
         audit_log_service: IAuditLogService,

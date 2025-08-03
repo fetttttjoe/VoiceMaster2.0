@@ -1,6 +1,6 @@
 # VoiceMaster2.0/views/setup_view.py
 import logging
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import discord
 from discord import ui
@@ -10,15 +10,17 @@ from config import settings
 from database.models import AuditLogEventType
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
-from main import VoiceMasterBot
 from views.voice_commands_views import AuthorOnlyView
+
+if TYPE_CHECKING:
+    from bot_instance import VoiceMasterBot
 
 
 class SetupModal(ui.Modal, title="VoiceMaster Setup"):
     category_name: ui.TextInput = ui.TextInput(label="Category Name", placeholder="e.g., 'Voice Channels'")
     channel_name: ui.TextInput = ui.TextInput(label="Creation Channel Name", placeholder="e.g., '➕ New Channel'")
 
-    def __init__(self, bot: VoiceMasterBot, guild_service: IGuildService, audit_log_service: IAuditLogService):
+    def __init__(self, bot: "VoiceMasterBot", guild_service: IGuildService, audit_log_service: IAuditLogService):
         super().__init__()
         self.bot = bot
         self.guild_service = guild_service
@@ -61,7 +63,7 @@ class SetupModal(ui.Modal, title="VoiceMaster Setup"):
 class SetupView(AuthorOnlyView):
     def __init__(self, ctx: Context):
         super().__init__(ctx, timeout=settings.VIEW_TIMEOUT)
-        self.bot = cast(VoiceMasterBot, ctx.bot)
+        self.bot = cast("VoiceMasterBot", ctx.bot)
         self.guild_service: IGuildService = self.bot.guild_service
         self.audit_log_service: IAuditLogService = self.bot.audit_log_service
 

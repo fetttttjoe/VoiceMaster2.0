@@ -1,13 +1,15 @@
 import inspect
 from functools import wraps
-from typing import Any, Callable, cast
+from typing import TYPE_CHECKING, Any, Callable, cast
 
 import discord
 from discord.ext.commands import Context
 
 from database.models import AuditLogEventType
-from main import VoiceMasterBot  # Import the custom bot class for type hinting
 from utils.formatters import format_template
+
+if TYPE_CHECKING:
+    from bot_instance import VoiceMasterBot
 
 
 def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
@@ -57,7 +59,7 @@ def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
             # Safely cast `ctx.bot` to `VoiceMasterBot` to inform type checkers
             # that our custom bot instance has `guild_service`, `voice_channel_service`,
             # and `audit_log_service` attributes.
-            bot_instance = cast(VoiceMasterBot, ctx.bot)
+            bot_instance = cast("VoiceMasterBot", ctx.bot)
             audit_service = bot_instance.audit_log_service
 
             # Determine the relevant channel ID for the log entry.

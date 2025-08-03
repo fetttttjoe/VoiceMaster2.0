@@ -1,7 +1,7 @@
 # VoiceMaster2.0/views/voice_commands_views.py
 import asyncio
 import logging
-from typing import Literal, Optional, cast
+from typing import TYPE_CHECKING, Literal, Optional, cast
 
 import discord
 from discord import ui
@@ -12,8 +12,10 @@ from config import settings
 from database.models import AuditLogEventType, Guild
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
-from main import VoiceMasterBot
 from utils.db_helpers import is_db_value_equal
+
+if TYPE_CHECKING:
+    from bot_instance import VoiceMasterBot
 
 
 class AuthorOnlyView(ui.View):
@@ -25,7 +27,7 @@ class AuthorOnlyView(ui.View):
     def __init__(self, ctx: Context, **kwargs):
         super().__init__(**kwargs)
         self.ctx = ctx
-        self.bot: VoiceMasterBot = cast(VoiceMasterBot, ctx.bot)
+        self.bot: "VoiceMasterBot" = cast("VoiceMasterBot", ctx.bot)
         self.message: Optional[discord.Message] = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
