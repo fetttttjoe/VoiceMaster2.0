@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "voicemaster_db"
     DB_ECHO: bool = False
     DATABASE_URL: str = ""
+    MAX_LOCKS: int = 10000
+    VIEW_TIMEOUT: int = 180
 
     @model_validator(mode='before')
     def assemble_db_connection(cls, v):

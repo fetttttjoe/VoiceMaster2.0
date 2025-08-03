@@ -5,6 +5,7 @@ import pytest
 
 from cogs.voice_commands import VoiceCommandsCog
 from database.models import Guild
+from utils import responses
 from views.voice_commands_views import ConfigView, RenameView, SelectView
 
 
@@ -26,7 +27,7 @@ async def test_config_command_not_setup(mock_bot, mock_ctx):
     await cog.config.callback(cog, mock_ctx)
 
     # Assert
-    mock_ctx.send.assert_called_once_with("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
+    mock_ctx.send.assert_called_once_with(responses.BOT_NOT_SETUP.format(prefix="."), ephemeral=True)
 
 
 @pytest.mark.asyncio
@@ -48,8 +49,9 @@ async def test_config_command_success(mock_bot, mock_ctx):
 
     # Assert
     mock_ctx.send.assert_called_once()
+    sent_embed = mock_ctx.send.call_args.kwargs["embed"]
+    assert sent_embed.title == responses.CONFIG_TITLE.format(guild_name=mock_ctx.guild.name)
     assert isinstance(mock_ctx.send.call_args.kwargs["view"], ConfigView)
-    assert "VoiceMaster Config" in mock_ctx.send.call_args.kwargs["embed"].title
 
 
 @pytest.mark.asyncio
@@ -64,12 +66,14 @@ async def test_edit_rename_command_not_setup(mock_bot, mock_ctx):
     mock_bot.guild_service = mock_guild_service
 
     cog = VoiceCommandsCog(mock_bot, mock_guild_service, AsyncMock(), AsyncMock())
+    rename_command = cog.edit.get_command("rename")
+    assert rename_command is not None
 
     # Act
-    await cog.edit_rename.callback(cog, mock_ctx)
+    await rename_command.callback(cog, mock_ctx)
 
     # Assert
-    mock_ctx.send.assert_called_once_with("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
+    mock_ctx.send.assert_called_once_with(responses.BOT_NOT_SETUP, ephemeral=True)
 
 
 @pytest.mark.asyncio
@@ -84,12 +88,14 @@ async def test_edit_rename_command_success(mock_bot, mock_ctx):
     mock_bot.guild_service = mock_guild_service
 
     cog = VoiceCommandsCog(mock_bot, mock_guild_service, AsyncMock(), AsyncMock())
+    rename_command = cog.edit.get_command("rename")
+    assert rename_command is not None
 
     # Act
-    await cog.edit_rename.callback(cog, mock_ctx)
+    await rename_command.callback(cog, mock_ctx)
 
     # Assert
-    mock_ctx.send.assert_called_once()
+    mock_ctx.send.assert_called_once_with(responses.EDIT_RENAME_PROMPT, view=mock_ctx.send.call_args.kwargs["view"])
     assert isinstance(mock_ctx.send.call_args.kwargs["view"], RenameView)
 
 
@@ -105,12 +111,14 @@ async def test_edit_select_command_not_setup(mock_bot, mock_ctx):
     mock_bot.guild_service = mock_guild_service
 
     cog = VoiceCommandsCog(mock_bot, mock_guild_service, AsyncMock(), AsyncMock())
+    select_command = cog.edit.get_command("select")
+    assert select_command is not None
 
     # Act
-    await cog.edit_select.callback(cog, mock_ctx)
+    await select_command.callback(cog, mock_ctx)
 
     # Assert
-    mock_ctx.send.assert_called_once_with("The bot has not been set up yet. Run `.voice setup` first.", ephemeral=True)
+    mock_ctx.send.assert_called_once_with(responses.BOT_NOT_SETUP, ephemeral=True)
 
 
 @pytest.mark.asyncio
@@ -130,10 +138,14 @@ async def test_edit_select_command_success(mock_bot, mock_ctx):
     mock_ctx.guild.owner_id = 456
 
     cog = VoiceCommandsCog(mock_bot, mock_guild_service, AsyncMock(), AsyncMock())
+    select_command = cog.edit.get_command("select")
+    assert select_command is not None
 
     # Act
-    await cog.edit_select.callback(cog, mock_ctx)
+    await select_command.callback(cog, mock_ctx)
 
     # Assert
-    mock_ctx.send.assert_called_once()
+    mock_ctx.send.assert_called_once_with(
+        responses.EDIT_SELECT_PROMPT, view=mock_ctx.send.call_args.kwargs["view"], ephemeral=True
+    )
     assert isinstance(mock_ctx.send.call_args.kwargs["view"], SelectView)

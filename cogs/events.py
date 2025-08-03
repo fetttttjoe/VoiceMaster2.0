@@ -7,6 +7,8 @@ from typing import cast
 import discord
 from discord.ext import commands
 
+from config import settings
+
 # Import necessary models
 from database.models import AuditLogEventType, Guild
 from interfaces.audit_log_service import IAuditLogService
@@ -46,7 +48,7 @@ class EventsCog(commands.Cog):
         self._guild_service = guild_service
         self._voice_channel_service = voice_channel_service
         self._audit_log_service = audit_log_service
-        self.MAX_LOCKS = 10000  # Max number of user locks to keep in memory
+        self.MAX_LOCKS = settings.MAX_LOCKS  # Max number of user locks to keep in memory
         self._user_locks: OrderedDict[int, asyncio.Lock] = OrderedDict()  # Store user-specific locks to prevent rapid channel creation
 
     @commands.Cog.listener()

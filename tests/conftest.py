@@ -97,6 +97,7 @@ def mock_ctx(mock_guild, mock_member, mock_bot):
     ctx.guild = mock_guild
     ctx.author = mock_member
     ctx.bot = mock_bot
+    ctx.prefix = "."
     return ctx
 
 
