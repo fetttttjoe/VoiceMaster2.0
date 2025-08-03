@@ -4,7 +4,7 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from config import DATABASE_URL, DB_ECHO  # Ensure DATABASE_URL and DB_ECHO are correctly imported from config
+from config import settings  # Ensure DATABASE_URL and DB_ECHO are correctly imported from config
 
 
 class Database:
@@ -24,7 +24,7 @@ class Database:
         # Create an asynchronous SQLAlchemy engine.
         # `echo=False` means SQL statements won't be printed to console by default,
         # which is suitable for production but can be set to `True` for debugging.
-        self.engine = create_async_engine(db_url, echo=DB_ECHO)
+        self.engine = create_async_engine(db_url, echo=settings.DB_ECHO)
 
         # Create a sessionmaker for asynchronous sessions.
         # `expire_on_commit=False` ensures that objects remain accessible after commit
@@ -79,4 +79,4 @@ class Database:
 
 # Instantiate the Database class with the URL from config.
 # This makes the `db` object available globally for easy session retrieval.
-db = Database(DATABASE_URL)
+db = Database(settings.DATABASE_URL)

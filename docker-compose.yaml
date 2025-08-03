@@ -31,6 +31,8 @@ services:
     build: .
     volumes:
       - .:/usr/src/app
+    environment:
+      POSTGRES_HOST: db
     depends_on:
       db:
         condition: service_healthy
@@ -39,6 +41,11 @@ services:
     build: .
     volumes:
       - .:/usr/src/app
-    command: ["sh", "-c", "pip install -r requirements-dev.txt && ruff check . --no-cache && mypy --cache-dir /dev/null ."]
+    environment:
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "ruff check . --no-cache && mypy --cache-dir /dev/null ."]
 volumes:
   postgres_data:

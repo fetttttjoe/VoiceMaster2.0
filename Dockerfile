@@ -23,11 +23,9 @@ RUN python -m venv /opt/venv
 # Set the PATH to include the virtual environment's binaries
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy the requirements files and install dependencies into the venv
-COPY requirements.txt .
-COPY requirements-dev.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir -r requirements-dev.txt
+# Copy the pyproject.toml file and install dependencies into the venv
+COPY pyproject.toml .
+RUN pip install --no-cache-dir .[dev]
 
 # ---- Final Stage ----
 FROM python:alpine3.22 AS final
