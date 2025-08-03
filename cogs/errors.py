@@ -1,5 +1,6 @@
 import logging
 
+import discord
 from discord.ext import commands
 
 from utils.checks import VoiceChannelCheckError
@@ -72,6 +73,18 @@ class ErrorHandlerCog(commands.Cog):
             )
         elif isinstance(original_error, commands.CheckFailure):
             return await ctx.send("You do not meet the requirements to run this command.", ephemeral=True, delete_after=10)
+        elif isinstance(original_error, discord.Forbidden):
+            return await ctx.send(
+                "🚫 I don't have the required permissions to perform this action. Please check my role and channel permissions.",
+                ephemeral=True,
+                delete_after=10,
+            )
+        elif isinstance(original_error, discord.HTTPException):
+            return await ctx.send(
+                "An error occurred while communicating with Discord. Please try again later.",
+                ephemeral=True,
+                delete_after=10,
+            )
 
         command_name = ctx.command.name if ctx.command else "unknown"
         logging.error(
