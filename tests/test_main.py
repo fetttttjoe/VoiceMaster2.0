@@ -43,7 +43,7 @@ async def test_setup_hook_initializes_services_and_loads_cogs(
 
 
 @pytest.mark.asyncio
-@patch("main.config")
+@patch("main.settings")
 @patch("main.VoiceMasterBot")
 @patch("asyncio.run")
 async def test_main_function_critical_log_on_no_token(

@@ -4,7 +4,7 @@ import logging
 import discord
 from discord.ext import commands
 
-import config
+from config import settings
 from container import Container
 from database.database import db
 from interfaces.audit_log_service import IAuditLogService
@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 
 
 class VoiceMasterBot(commands.Bot):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.guild_service: IGuildService
         self.voice_channel_service: IVoiceChannelService
@@ -43,7 +43,7 @@ class VoiceMasterBot(commands.Bot):
 
 async def main():
     """Initializes and runs the bot."""
-    if not config.DISCORD_TOKEN:
+    if not settings.DISCORD_TOKEN:
         logging.critical("DISCORD_TOKEN is not set. Please check your .env file.")
         return
 
@@ -56,7 +56,7 @@ async def main():
     bot = VoiceMasterBot(command_prefix=".", intents=intents)
 
     @bot.event
-    async def on_ready():
+    async def on_ready() -> None:
         """Event triggered when the bot is ready."""
         if bot.user:
             logging.info(f"Logged in as {bot.user.name} ({bot.user.id})")
@@ -64,7 +64,7 @@ async def main():
         else:
             logging.error("Bot user is not available on ready.")
 
-    await bot.start(config.DISCORD_TOKEN)
+    await bot.start(settings.DISCORD_TOKEN)
 
 
 if __name__ == "__main__":

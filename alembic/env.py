@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 
 # Custom imports for your project
-from config import DATABASE_URL  # Make sure this points to your config
+from config import settings  # Make sure this points to your config
 from database.models import Base   # Make sure this points to your models
 
 # this is the Alembic Config object, which provides
@@ -35,7 +35,7 @@ def run_migrations_offline() -> None:
 
     """
     # For offline mode, we can use the synchronous URL from the config
-    url = DATABASE_URL
+    url = settings.DATABASE_URL
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -63,7 +63,7 @@ async def run_migrations_online() -> None:
     """
     
     # Create an async engine from the config
-    connectable = create_async_engine(DATABASE_URL)
+    connectable = create_async_engine(settings.DATABASE_URL)
 
     async with connectable.connect() as connection:
         # Run the migrations within the connection's transaction
