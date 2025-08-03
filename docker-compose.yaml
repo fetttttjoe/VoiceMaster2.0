@@ -29,23 +29,23 @@ services:
 
   test:
     build: .
+    user: root
     volumes:
       - .:/usr/src/app
     environment:
       POSTGRES_HOST: db
+      POSTGRES_USER: "testuser"
+      POSTGRES_PASSWORD: "testpassword"
+      POSTGRES_DB: "testdb"
+      POSTGRES_PORT: 5432
     depends_on:
       db:
         condition: service_healthy
-    command: ["pytest", "--cov=.", "--cov-report=term-missing"]
+    command: ["pytest", "-p", "no:cacheprovider", "--cov=.", "--cov-report=term-missing"]
   lint:
     build: .
     volumes:
       - .:/usr/src/app
-    environment:
-      POSTGRES_HOST: db
-    depends_on:
-      db:
-        condition: service_healthy
     command: ["sh", "-c", "ruff check . --no-cache && mypy --cache-dir /dev/null ."]
 volumes:
   postgres_data:

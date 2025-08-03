@@ -2,21 +2,19 @@
 import asyncio
 import logging
 from collections import OrderedDict
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import discord
 from discord.ext import commands
 
 from config import settings
-
-# Import necessary models
 from database.models import AuditLogEventType, Guild
 from interfaces.audit_log_service import IAuditLogService
-
-# Abstractions for dependency injection
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
-from main import VoiceMasterBot  # Import your custom bot class for type hinting
+
+if TYPE_CHECKING:
+    from bot_instance import VoiceMasterBot
 
 # Import for safe DB value comparison
 from utils.db_helpers import is_db_value_equal
@@ -30,7 +28,7 @@ class EventsCog(commands.Cog):
 
     def __init__(
         self,
-        bot: VoiceMasterBot,
+        bot: "VoiceMasterBot",
         guild_service: IGuildService,
         voice_channel_service: IVoiceChannelService,
         audit_log_service: IAuditLogService,
