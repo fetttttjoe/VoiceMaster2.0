@@ -6,7 +6,7 @@ If you'd like to invite the bot, you can use the following link:
 🔗 [Invite Link](https://discord.com/oauth2/authorize?client_id=1395824661207453746&permissions=8&response_type=code&redirect_uri=https%3A%2F%2Flocalhost&integration_type=0&scope=bot+applications.commands+guilds.members.read)
 
 > ⚠️ **Note:** The bot currently requests administrator permissions.  
-> If anyone besides me is interested in using it, feel free to open a pull request / Issue.  
+> If anyone besides me is interested in using it, feel free to open a pull request or issue.  
 > I'll then look into defining the minimal set of permissions the bot actually needs.
 
 ## Features
@@ -27,127 +27,127 @@ If you'd like to invite the bot, you can use the following link:
 
 ## Technologies Used
 
-- **Python**: The core programming language.
-- **discord.py**: Asynchronous Python wrapper for the Discord API.
-- **SQLAlchemy**: Python SQL toolkit and Object Relational Mapper for database interactions.
-- **asyncpg**: PostgreSQL driver for `asyncio`.
-- **Alembic**: Database migration tool for SQLAlchemy.
-- **python-dotenv**: For managing environment variables.
-- **PostgreSQL**: Relational database for storing guild and user configurations, and audit logs.
-- **Dependency Injection**: Structured code using abstractions (interfaces) for services and repositories to improve testability and maintainability.
-- **Docker**: For containerization of the bot and database services.
-- **pytest**: For unit and integration testing.
-- **pytest-asyncio**: Pytest plugin for testing `asyncio` code.
+- **Python**
+- **discord.py**
+- **SQLAlchemy**
+- **asyncpg**
+- **Alembic**
+- **python-dotenv**
+- **PostgreSQL**
+- **Dependency Injection** (interfaces, container)
+- **Docker**
+- **pytest** & **pytest-asyncio**
 
 ## Setup and Installation
 
 ### Prerequisites
 
-- Docker and Docker Compose installed on your system.
-- A Discord Bot Token from the [Discord Developer Portal](https://discord.com/developers/applications).
-- Basic understanding of Discord bot setup.
+- Docker & Docker Compose
+- A Discord Bot Token ([Discord Developer Portal](https://discord.com/developers/applications))
+- Basic familiarity with Discord bots
 
 ### Steps
 
-1.  **Clone the repository:**
+1. **Clone the repo**
 
-    ```bash
-    git clone <your-repository-url>
-    cd VoiceMaster2.0
-    ```
+2. **Create your `.env` file**
 
-2.  **Create `.env` file:**
-    Copy the example environment file and fill in your details:
+   ```bash
+   cp .env.example .env
+   ```
 
-    ```bash
-    cp .env.example .env
-    ```
+   Then open `.env` and fill in:
 
-    Open the newly created `.env` file and populate it with your Discord bot token and PostgreSQL credentials.
+   ```ini
+   DISCORD_TOKEN=your_super_secret_bot_token
+   POSTGRES_USER=voicemaster
+   POSTGRES_PASSWORD=your_secure_password
+   POSTGRES_DB=voicemaster_db
+   POSTGRES_HOST=db
+   POSTGRES_PORT=5432
+   ```
 
-    ```ini
-    # Your Discord Bot Token
-    DISCORD_TOKEN=your_super_secret_bot_token
+3. **Build & run with Docker Compose**
 
-    # PostgreSQL Connection Details (these can be left as default if using Docker Compose locally)
-    POSTGRES_USER=voicemaster
-    POSTGRES_PASSWORD=your_secure_password
-    POSTGRES_DB=voicemaster_db
-    POSTGRES_HOST=db
-    POSTGRES_PORT=5432
-    ```
+   ```bash
+   docker-compose up --build -d
+   ```
 
-3.  **Build and Run with Docker Compose:**
-    Navigate to the project root directory where `docker-compose.yaml` is located and run:
+   - `--build`: rebuilds the images (useful after changes)
+   - `-d`: runs in detached mode
 
-    ```bash
-    docker-compose up --build -d
-    ```
-
-    - `--build`: Builds the Docker images before starting containers. This is important for the first run or after Dockerfile changes.
-    - `-d`: Runs the services in detached mode (in the background).
-
-    This command will:
-
-    - Build the bot's Docker image.
-    - Set up a PostgreSQL database container.
-    - Run database migrations using Alembic.
-    - Start the bot.
+4. **Local installation (optional)**  
+   For development without Docker:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # Windows: `.venv\ScriptsActivate`
+   pip install --upgrade pip
+   pip install -e .[dev]
+   ```
+   Then:
+   ```bash
+   alembic upgrade head
+   python main.py
+   ```
 
 ## Usage
 
-1.  **Invite the bot to your Discord server.** Make sure your bot has the necessary permissions (e.g., `manage_channels`, `manage_roles`, `move_members`, `view_channel`, `connect`, `speak`).
-2.  **Run the setup command:**
-    Once the bot is online, an administrator must run the setup command in a text channel:
-    ```
-    .voice setup
-    ```
-    Follow the bot's prompts to create a voice category for temporary channels and a "Join to Create" voice channel.
-3.  **Create your first channel:**
-    Join the "Join to Create" voice channel. The bot will automatically create a new personal voice channel for you and move you into it.
-4.  **Explore commands:**
-    Use `.voice` for a list of all commands:
-    ```
-    .voice
-    ```
-    This will display an embed with available commands and their descriptions.
+1. Invite your bot (ensure it has `manage_channels`, `manage_roles`, `move_members`, `view_channel`, `connect`, `speak`).
+2. Run setup:
+   ```
+   .voice setup
+   ```
+3. Join “Join to Create” to spawn your personal voice channel.
+4. Type `.voice` to see all commands.
 
 ## Configuration
 
-The bot's configuration, such as Discord token and database connection details, is managed via environment variables loaded from the `.env` file.
+Environment variables (in `.env`):
 
-Admins can also configure the bot directly through Discord commands:
+- **Required**  
+  `DISCORD_TOKEN`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`
 
-- `.voice edit rename`: To change the name of the creation channel or category.
-- `.voice edit select`: To choose an existing channel or category for bot operations.
-- `.voice name <new_name>`: Set your default channel name.
-- `.voice limit <number>`: Set your default channel user limit.
+- **Optional**
+  - `DB_ECHO` (bool, default `False`): echo SQL queries for debugging
+  - `MAX_LOCKS` (int, default `1000`): max channel locks per user
+  - `VIEW_TIMEOUT` (int, default `100`): seconds before interactive menus time out
+  - `DATABASE_URL` (str): full asyncpg DSN (`postgresql+asyncpg://user:pass@host:port/db`) to override individual POSTGRES\_\*
+
+## Architecture
+
+VoiceMaster 2.0 uses a **repository/service** pattern:
+
+- **Repositories** encapsulate all SQLAlchemy operations for each domain (guilds, channels, audit logs).
+- **Services** implement higher-level logic by calling into repositories.
+- **Container** in `container.py` wires repositories → services, then attaches them to the `VoiceMasterBot` in `bot_instance.py`.
+- Cogs access these via `ctx.bot.guild_service`, `ctx.bot.voice_channel_service`, etc.
+
+This promotes testability (mockable services), separation of concerns, and clean dependency injection.
 
 ## Running Tests
 
-Tests are integrated into the Docker Compose setup. To run the test suite:
+In Docker Compose:
 
-1.  Ensure your Docker services are built (`docker-compose build`).
-2.  From the project root, execute the test service:
-    ```bash
-    docker-compose run --rm test
-    ```
-    This command will spin up the database, run pytest, and then remove the test container upon completion.
+```bash
+docker-compose run --rm test
+```
+
+```bash
+docker-compose run --rm lint
+```
 
 ## Database Schema
 
-VoiceMaster 2.0 uses a PostgreSQL database to store guild configurations, user-specific channel settings, active voice channels, and an audit log of bot activities.
+Key tables:
 
-Key tables include:
+- `guilds`
+- `guild_settings`
+- `user_settings`
+- `voice_channels`
+- `audit_log_entries`
 
-- `guilds`: Stores primary guild configurations, including owner ID, voice category ID, and creation channel ID.
-- `guild_settings`: Stores default channel name and limit settings for guilds.
-- `user_settings`: Stores custom channel name and limit preferences for individual users.
-- `voice_channels`: Tracks active temporary voice channels and their owners.
-- `audit_log_entries`: Records significant bot events and administrative actions.
-
-Database migrations are managed using Alembic.
+Migrations are managed by Alembic.
 
 ## License
 
-This software is provided under a custom source-available license. You are free to use, modify, and distribute this software, but if you monetize any product or service derived from this software, you are required to share a portion of the revenue with the original author.
+This project is under a custom source-available license; modifications and non-open commercial use require revenue sharing with the original author.
