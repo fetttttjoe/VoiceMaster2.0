@@ -1,15 +1,13 @@
 # VoiceMaster2.0/utils/checks.py
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
+from bot_instance import VoiceMasterBot
 from interfaces.voice_channel_service import IVoiceChannelService
 from utils.db_helpers import is_db_value_equal
-
-if TYPE_CHECKING:
-    from bot_instance import VoiceMasterBot
 
 # --- Custom Exception Classes for Command Checks ---
 

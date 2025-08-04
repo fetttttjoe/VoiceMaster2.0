@@ -1,19 +1,17 @@
 # VoiceMaster2.0/views/setup_view.py
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import discord
 from discord import ui
 from discord.ext.commands import Context
 
+from bot_instance import VoiceMasterBot
 from config import settings
 from database.models import AuditLogEventType
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
 from views.voice_commands_views import AuthorOnlyView
-
-if TYPE_CHECKING:
-    from bot_instance import VoiceMasterBot
 
 
 class SetupModal(ui.Modal, title="VoiceMaster Setup"):

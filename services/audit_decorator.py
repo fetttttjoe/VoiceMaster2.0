@@ -1,15 +1,13 @@
 import inspect
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import Any, Callable, cast
 
 import discord
 from discord.ext.commands import Context
 
+from bot_instance import VoiceMasterBot
 from database.models import AuditLogEventType
 from utils.formatters import format_template
-
-if TYPE_CHECKING:
-    from bot_instance import VoiceMasterBot
 
 
 def audit_log(event_type: AuditLogEventType, details_template: str) -> Callable:
