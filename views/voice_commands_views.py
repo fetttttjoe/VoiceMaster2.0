@@ -1,21 +1,19 @@
 # VoiceMaster2.0/views/voice_commands_views.py
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Literal, Optional, cast
+from typing import Literal, Optional, cast
 
 import discord
 from discord import ui
 from discord.ext.commands import Context
 from discord.interactions import Interaction
 
+from bot_instance import VoiceMasterBot
 from config import settings
 from database.models import AuditLogEventType, Guild
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
 from utils.db_helpers import is_db_value_equal
-
-if TYPE_CHECKING:
-    from bot_instance import VoiceMasterBot
 
 
 class AuthorOnlyView(ui.View):

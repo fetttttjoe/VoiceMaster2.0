@@ -2,19 +2,17 @@
 import asyncio
 import logging
 from collections import OrderedDict
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import discord
 from discord.ext import commands
 
+from bot_instance import VoiceMasterBot
 from config import settings
 from database.models import AuditLogEventType, Guild
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
 from interfaces.voice_channel_service import IVoiceChannelService
-
-if TYPE_CHECKING:
-    from bot_instance import VoiceMasterBot
 
 # Import for safe DB value comparison
 from utils.db_helpers import is_db_value_equal

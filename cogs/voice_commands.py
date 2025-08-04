@@ -1,11 +1,12 @@
 import logging
-from typing import TYPE_CHECKING, Optional, cast
+from typing import Optional, cast
 
 import discord
 from discord import ui
 from discord.ext import commands
 from discord.ext.commands import Context
 
+from bot_instance import VoiceMasterBot
 from database.models import AuditLogEventType
 from interfaces.audit_log_service import IAuditLogService
 from interfaces.guild_service import IGuildService
@@ -17,9 +18,6 @@ from utils.db_helpers import is_db_value_equal
 from utils.embed_helpers import create_embed
 from views.setup_view import SetupView
 from views.voice_commands_views import ConfigView, RenameView, SelectView
-
-if TYPE_CHECKING:
-    from bot_instance import VoiceMasterBot
 
 
 class VoiceCommandsCog(commands.Cog):
