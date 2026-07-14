@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: "pip" # covers pyproject.toml
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker" # Dockerfile
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions" # .github/workflows
+    directory: "/"
+    schedule:
+      interval: "weekly"
